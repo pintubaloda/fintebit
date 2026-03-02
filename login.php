@@ -45,11 +45,6 @@ if($_SERVER['REQUEST_METHOD']==='POST') {
         </div>
         <button type="submit" class="btn btn-accent w-full" style="justify-content:center;margin-bottom:1rem"><i class="fas fa-sign-in-alt"></i> Sign In</button>
       </form>
-      <div style="background:rgba(255,107,53,0.06);border:1px solid rgba(255,107,53,0.15);border-radius:10px;padding:1rem;font-size:0.8rem;color:var(--text-muted);margin-bottom:1rem;">
-        <strong style="color:var(--text)">Demo Accounts:</strong><br>
-        Admin: admin@fintebit.com / password<br>
-        User: user@fintebit.com / password
-      </div>
       <p style="text-align:center;font-size:0.875rem;color:var(--text-muted)">
         Don't have an account? <a href="register.php" style="color:var(--accent);font-weight:600">Create one free</a>
       </p>
