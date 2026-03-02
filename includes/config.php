@@ -234,11 +234,12 @@ function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
     $updateOnlyLegacy = $conn->prepare("UPDATE courses SET lessons=? WHERE id=?");
 
     $templates = [
-        ['Getting Started', 'Understand the fundamentals and workflow for this course.'],
-        ['Core Concepts', 'Learn the essential concepts you must know before practice.'],
-        ['Hands-on Practice', 'Apply concepts with practical examples and mini tasks.'],
-        ['Real-world Implementation', 'Use this lesson to connect theory with real projects.'],
-        ['Summary and Next Steps', 'Review key takeaways and plan your next improvements.'],
+        ['Foundations', 'Build core understanding before implementation.'],
+        ['Core Workflow', 'Learn the step-by-step workflow used by practitioners.'],
+        ['Guided Practice', 'Apply the concept with practical, supervised exercises.'],
+        ['Project Application', 'Use the concept in a realistic mini-project scenario.'],
+        ['Troubleshooting', 'Identify and fix common mistakes with confidence.'],
+        ['Review and Assessment', 'Consolidate learning and prepare for assessment.'],
     ];
 
     while ($course = $courses->fetch_assoc()) {
@@ -253,7 +254,7 @@ function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
             $order = 1;
             foreach ($templates as $template) {
                 $title = $template[0] . ': ' . $courseTitle;
-                $content = $template[1] . ' In "' . $courseTitle . '", focus on consistent learning and implementation.';
+                $content = generateLessonContent($courseTitle, $title, $order, $template[1]);
                 $duration = (string)(10 + $order * 5) . ' min';
                 $preview = $order === 1 ? 1 : 0;
                 $insertLesson->bind_param("isssii", $courseId, $title, $content, $duration, $order, $preview);
@@ -270,6 +271,25 @@ function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
             } elseif (isset($courseColumns['lessons'])) {
                 $updateOnlyLegacy->bind_param("ii", $lessonCount, $courseId);
                 $updateOnlyLegacy->execute();
+            }
+        }
+
+        // Upgrade old generic/short lesson content to richer content.
+        $existingLessons = $conn->prepare("SELECT id, title, content, order_num FROM lessons WHERE course_id=? ORDER BY order_num ASC");
+        $existingLessons->bind_param("i", $courseId);
+        $existingLessons->execute();
+        $rows = $existingLessons->get_result();
+        $updateLesson = $conn->prepare("UPDATE lessons SET content=? WHERE id=?");
+        while ($lesson = $rows->fetch_assoc()) {
+            $text = trim((string)$lesson['content']);
+            $isGeneric = strlen($text) < 140
+                || stripos($text, 'fundamentals and workflow') !== false
+                || stripos($text, 'consistent learning and implementation') !== false;
+            if ($isGeneric) {
+                $newContent = generateLessonContent($courseTitle, $lesson['title'], (int)$lesson['order_num'], 'Practical lesson content');
+                $lessonId = (int)$lesson['id'];
+                $updateLesson->bind_param("si", $newContent, $lessonId);
+                $updateLesson->execute();
             }
         }
     }
@@ -332,4 +352,36 @@ function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
             $insertQuestion->execute();
         }
     }
+}
+
+function generateLessonContent($courseTitle, $lessonTitle, $orderNum, $focusLine) {
+    $step = max(1, (int)$orderNum);
+    $practiceTask = "Create a short implementation related to \"" . $courseTitle . "\" and validate the result with one test case.";
+    if ($step === 1) {
+        $practiceTask = "Set up your working environment and document the initial setup steps for future reuse.";
+    } elseif ($step === 2) {
+        $practiceTask = "Implement one complete workflow and note where each concept is applied.";
+    } elseif ($step >= 5) {
+        $practiceTask = "Debug two common errors and write a short checklist to prevent them.";
+    }
+
+    return
+        "Lesson goal:\n" .
+        "Master \"" . $lessonTitle . "\" for " . $courseTitle . " with practical understanding.\n\n" .
+        "What you will learn:\n" .
+        "1. " . $focusLine . "\n" .
+        "2. How this topic fits into real implementation work.\n" .
+        "3. Common mistakes and how to avoid them.\n\n" .
+        "Step-by-step guide:\n" .
+        "- Start with the core concept and define expected output.\n" .
+        "- Implement the concept in a small, focused example.\n" .
+        "- Validate output, then refactor for clarity and reuse.\n\n" .
+        "Practice task:\n" .
+        $practiceTask . "\n\n" .
+        "Completion checklist:\n" .
+        "- You can explain the concept in your own words.\n" .
+        "- You can implement it without copying.\n" .
+        "- You can identify at least one optimization or improvement.\n\n" .
+        "Next step:\n" .
+        "Attempt the lesson quiz and pass it to mark this lesson complete.";
 }
