@@ -1,6 +1,6 @@
 # Fintebit
 
-PHP + MySQL learning platform, prepared for GitHub and Render deployment.
+PHP + MySQL learning platform, prepared for GitHub and Railway deployment.
 
 ## 1) Run locally
 
@@ -17,42 +17,30 @@ Default demo logins after setup:
 - Admin: `admin@fintebit.com` / `admin123`
 - User: `user@fintebit.com` / `user123`
 
-## 2) Push to GitHub
-
-Run from project folder:
-
-```bash
-git init
-git add .
-git commit -m "chore: prepare fintebit for github and render"
-git branch -M main
-git remote add origin <YOUR_GITHUB_REPO_URL>
-git push -u origin main
-```
-
-## 3) Deploy on Render
+## 2) Deploy on Railway
 
 This repo includes:
 - `Dockerfile`
-- `render.yaml`
+- `railway.json`
+- `docker-entrypoint.sh` (binds Apache to Railway `PORT`)
 
 ### Steps
 
-1. Create a new **Web Service** on Render from your GitHub repo.
-2. Render auto-detects `render.yaml` and Docker build.
-3. Add env vars in Render dashboard (or keep from `render.yaml`):
-   - `DB_HOST`
-   - `DB_PORT` (default `3306`)
-   - `DB_USER`
-   - `DB_PASS`
-   - `DB_NAME` (default `fintebit`)
-   - `SITE_NAME` (default `Fintebit`)
-   - `SITE_URL` (your Render service URL)
-4. Deploy.
-5. After first deploy, open `https://<your-service>/setup.php` once to create tables and seed data.
+1. In Railway, create a new project from your GitHub repo.
+2. Add a **MySQL** service/plugin inside the same Railway project.
+3. In your app service, set these environment variables:
+   - `DB_HOST` = MySQL host from Railway
+   - `DB_PORT` = `3306`
+   - `DB_USER` = MySQL user from Railway
+   - `DB_PASS` = MySQL password from Railway
+   - `DB_NAME` = `fintebit`
+   - `SITE_NAME` = `Fintebit`
+   - `SITE_URL` = your Railway public URL
+4. Deploy the app service.
+5. After first deploy, open `https://<your-railway-domain>/setup.php` once to create tables and seed data.
 
 ## Notes
 
-- App config now uses environment variables with safe local defaults.
+- App config uses environment variables with local defaults.
 - `setup.php` seeding bind types were corrected for clean initialization.
 - `.gitignore` and `.env.example` are included for GitHub-safe commits.
