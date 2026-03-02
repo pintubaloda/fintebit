@@ -1,32 +1,113 @@
 <?php
 require_once 'includes/db.php';
 
-function setupDetailedLessonContent($courseTitle, $lessonTitle, $focusLine) {
-    return
-        "Lesson: " . $lessonTitle . "\n\n" .
-        "This lesson belongs to \"" . $courseTitle . "\" and follows a practical concept-driven format.\n\n" .
-        "1) Core Idea\n" .
-        $focusLine . "\n\n" .
-        "Example:\n" .
-        "Break the concept into input -> process -> output and validate each stage.\n\n" .
-        "2) Practical Flow\n" .
-        "Use a repeatable workflow to implement the concept confidently.\n\n" .
-        "Example:\n" .
-        "Plan -> Implement -> Test -> Refactor.\n\n" .
-        "3) Common Mistakes\n" .
-        "Identify where learners usually fail and apply a correction strategy.\n\n" .
-        "Example:\n" .
-        "Write one failing scenario and the corrected solution.\n\n" .
-        "4) Real Project Use\n" .
-        "Connect this lesson to real product features and production behavior.\n\n" .
-        "Example:\n" .
-        "Map this concept to one feature in a real application module.\n\n" .
-        "5) Assessment Readiness\n" .
-        "Summarize key points before attempting quiz questions.\n\n" .
-        "Example:\n" .
-        "Create a 3-point checklist and verify your implementation.\n\n" .
-        "Next step:\n" .
-        "Take the quiz for this lesson and pass it to mark completion.";
+function setupDetailedLessonContent($courseTitle, $lessonTitle, $orderNum, $focusLine) {
+    $concepts = setupLessonSpecificConcepts($courseTitle, $lessonTitle, $orderNum, $focusLine);
+    $content = "Lesson: " . $lessonTitle . "\n\n";
+    $content .= "This lesson belongs to \"" . $courseTitle . "\" and follows a practical concept-driven format.\n\n";
+    $i = 1;
+    foreach ($concepts as $c) {
+        $content .= $i . ") " . $c['title'] . "\n";
+        $content .= $c['explain'] . "\n\n";
+        $content .= "Example:\n" . $c['example'] . "\n\n";
+        $i++;
+    }
+    $content .= "Next step:\nTake the quiz for this lesson and pass it to mark completion.";
+    return $content;
+}
+
+function setupCourseConceptBlocks($courseTitle, $focusLine) {
+    $title = strtolower($courseTitle);
+    if (strpos($title, 'excel') !== false) {
+        return [
+            ['title' => 'Structured Data Tables', 'explain' => 'Organize data as tables for safer formulas and filtering.', 'example' => "Range -> Table (Ctrl+T)\nUse: =SUM(Table1[Revenue])"],
+            ['title' => 'Core Functions', 'explain' => 'Combine conditional and lookup functions for automation.', 'example' => "=SUMIFS(C:C,A:A,\"West\",B:B,\">=2026-01-01\")"],
+            ['title' => 'Validation Rules', 'explain' => 'Reduce user error with controlled input patterns.', 'example' => "Data Validation -> List -> allowed status values"],
+            ['title' => 'Pivot Analysis', 'explain' => 'Summarize and compare trends with pivots.', 'example' => "Pivot rows: Product, values: Sum(Revenue)"],
+            ['title' => 'Dashboard Metrics', 'explain' => 'Visualize performance with KPI cards and charts.', 'example' => "Build KPI cells and connect dynamic chart ranges"],
+        ];
+    }
+    if (strpos($title, 'javascript') !== false || strpos($title, 'react') !== false || strpos($title, 'typescript') !== false || strpos($title, 'html') !== false || strpos($title, 'css') !== false) {
+        return [
+            ['title' => 'Component Structure', 'explain' => 'Split UI into reusable modules with clear responsibilities.', 'example' => "const Card = ({title}) => <section>{title}</section>;"],
+            ['title' => 'State Flow', 'explain' => 'Control rendering through predictable state updates.', 'example' => "setItems(prev => [...prev, newItem]);"],
+            ['title' => 'Async Operations', 'explain' => 'Handle API calls with loading, success, and error states.', 'example' => "const data = await (await fetch('/api/items')).json();"],
+            ['title' => 'Validation', 'explain' => 'Protect input boundaries and edge states.', 'example' => "if (!email.includes('@')) setError('Invalid email');"],
+            ['title' => 'Performance', 'explain' => 'Optimize expensive calculations and rendering.', 'example' => "const total = useMemo(() => calc(items), [items]);"],
+        ];
+    }
+    if (strpos($title, 'database') !== false || strpos($title, 'sql') !== false || strpos($title, 'mysql') !== false) {
+        return [
+            ['title' => 'Schema Design', 'explain' => 'Model entities with key relationships and constraints.', 'example' => "users(id PK) -> orders(user_id FK)"],
+            ['title' => 'Query Design', 'explain' => 'Write precise joins, filters, and aggregations.', 'example' => "SELECT c.name, COUNT(*) FROM courses c JOIN enrollments e ON e.course_id=c.id GROUP BY c.name;"],
+            ['title' => 'Index Strategy', 'explain' => 'Index high-value filters and join columns.', 'example' => "CREATE INDEX idx_enrollments_user ON enrollments(user_id);"],
+            ['title' => 'Transactions', 'explain' => 'Guarantee consistency across multi-step writes.', 'example' => "START TRANSACTION; ... COMMIT;"],
+            ['title' => 'Explain Plans', 'explain' => 'Analyze and optimize query execution paths.', 'example' => "EXPLAIN SELECT ... WHERE user_id=?;"],
+        ];
+    }
+    return [
+        ['title' => 'Core Fundamentals', 'explain' => $focusLine, 'example' => "Define desired output and map required steps."],
+        ['title' => 'Practical Workflow', 'explain' => 'Apply the concept through a repeatable workflow.', 'example' => "Plan -> Implement -> Validate -> Improve"],
+        ['title' => 'Quality Checks', 'explain' => 'Verify outcomes with explicit checks.', 'example' => "Run checklist and compare expected vs actual."],
+        ['title' => 'Common Pitfalls', 'explain' => 'Avoid common errors through review.', 'example' => "Document one bug and corrected fix."],
+        ['title' => 'Project Relevance', 'explain' => 'Connect lesson concept to real product features.', 'example' => "Map this concept to one module in your app."],
+    ];
+}
+
+function setupLessonSpecificConcepts($courseTitle, $lessonTitle, $orderNum, $focusLine) {
+    $base = setupCourseConceptBlocks($courseTitle, $focusLine);
+    $count = count($base);
+    if ($count === 0) {
+        return [];
+    }
+    $seed = abs(crc32(strtolower($lessonTitle))) % $count;
+    $start = (($orderNum - 1) + $seed) % $count;
+    $selected = [];
+    for ($i = 0; $i < min(5, $count); $i++) {
+        $selected[] = $base[($start + $i) % $count];
+    }
+    return $selected;
+}
+
+function setupQuizQuestionsForLesson($courseTitle, $lessonTitle, $orderNum, $focusLine) {
+    $concepts = setupLessonSpecificConcepts($courseTitle, $lessonTitle, $orderNum, $focusLine);
+    while (count($concepts) < 4) {
+        $concepts[] = ['title' => 'Core Practice', 'explain' => 'Apply with examples.', 'example' => 'Implement and validate'];
+    }
+    return [
+        [
+            "In \"" . $lessonTitle . "\", which concept should be prioritized first?",
+            $concepts[0]['title'],
+            $concepts[1]['title'],
+            $concepts[2]['title'],
+            $concepts[3]['title'],
+            "A",
+        ],
+        [
+            "Which method best supports \"" . $concepts[1]['title'] . "\"?",
+            "Skip implementation",
+            "Practice with examples and validate output",
+            "Only memorize terms",
+            "Avoid reviews",
+            "B",
+        ],
+        [
+            "For " . $courseTitle . ", what aligns with \"" . $concepts[2]['title'] . "\"?",
+            "Ignore checks",
+            "Copy without understanding",
+            "Implement, test, and refine",
+            "Skip learning outcomes",
+            "C",
+        ],
+        [
+            "What should you do after finishing \"" . $lessonTitle . "\"?",
+            "Skip the assessment",
+            "Move randomly to another topic",
+            "Delete your notes",
+            "Take the quiz and confirm understanding",
+            "D",
+        ],
+    ];
 }
 
 // Create tables
@@ -207,7 +288,7 @@ while ($allCourseRows && ($cr = $allCourseRows->fetch_assoc())) {
     $idx = 1;
     foreach ($lessonTemplates as $tpl) {
         $ltitle = $tpl[0] . ": " . $ctitle;
-        $lcontent = setupDetailedLessonContent($ctitle, $ltitle, $tpl[1]);
+        $lcontent = setupDetailedLessonContent($ctitle, $ltitle, $idx, $tpl[1]);
         $duration = (string)(10 + $idx * 5) . " min";
         $preview = $idx === 1 ? 1 : 0;
         $lessonInsert->bind_param("isssii", $cid, $ltitle, $lcontent, $duration, $idx, $preview);
@@ -219,7 +300,7 @@ while ($allCourseRows && ($cr = $allCourseRows->fetch_assoc())) {
 // Seed quizzes and questions for each lesson
 $conn->query("DELETE FROM quiz_questions");
 $conn->query("DELETE FROM quizzes");
-$lessonRows = $conn->query("SELECT l.id, l.course_id, l.title, c.title as course_title FROM lessons l JOIN courses c ON c.id=l.course_id ORDER BY l.course_id, l.order_num");
+$lessonRows = $conn->query("SELECT l.id, l.course_id, l.order_num, l.title, c.title as course_title FROM lessons l JOIN courses c ON c.id=l.course_id ORDER BY l.course_id, l.order_num");
 $quizInsert = $conn->prepare("INSERT INTO quizzes (course_id, lesson_id, title, pass_percentage) VALUES (?,?,?,60)");
 $questionInsert = $conn->prepare("INSERT INTO quiz_questions (quiz_id, question_text, option_a, option_b, option_c, option_d, correct_option) VALUES (?,?,?,?,?,?,?)");
 while ($lessonRows && ($lr = $lessonRows->fetch_assoc())) {
@@ -230,32 +311,8 @@ while ($lessonRows && ($lr = $lessonRows->fetch_assoc())) {
     $quizInsert->execute();
     $quizId = (int)$conn->insert_id;
 
-    $qs = [
-        [
-            "What is the main objective of \"" . $lr['title'] . "\"?",
-            "Understand and apply core concepts",
-            "Skip practice and examples",
-            "Avoid fundamentals",
-            "Only read headings",
-            "A",
-        ],
-        [
-            "Which approach improves mastery in this lesson?",
-            "Memorize without implementation",
-            "Practice and review errors",
-            "Avoid feedback",
-            "Skip assessments",
-            "B",
-        ],
-        [
-            "What should you do after finishing this lesson?",
-            "Move on without revision",
-            "Ignore important points",
-            "Summarize and apply in a small task",
-            "Repeat mistakes without checks",
-            "C",
-        ],
-    ];
+    $orderNum = (int)$lr['order_num'];
+    $qs = setupQuizQuestionsForLesson($lr['course_title'], $lr['title'], $orderNum, 'Lesson-specific understanding');
     foreach ($qs as $q) {
         $questionInsert->bind_param("issssss", $quizId, $q[0], $q[1], $q[2], $q[3], $q[4], $q[5]);
         $questionInsert->execute();

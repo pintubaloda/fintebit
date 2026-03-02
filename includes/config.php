@@ -308,68 +308,53 @@ function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
         }
     }
 
-    $missingQuizzes = $conn->query("SELECT l.id as lesson_id, l.course_id, l.title as lesson_title, c.title as course_title
+    $lessonQuizRows = $conn->query("SELECT l.id as lesson_id, l.course_id, l.order_num, l.title as lesson_title, c.title as course_title, q.id as quiz_id
                                     FROM lessons l
                                     JOIN courses c ON c.id=l.course_id
                                     LEFT JOIN quizzes q ON q.lesson_id=l.id
-                                    WHERE q.id IS NULL");
-    if (!$missingQuizzes) {
+                                    ORDER BY l.course_id, l.order_num");
+    if (!$lessonQuizRows) {
         return;
     }
 
     $insertQuiz = $conn->prepare("INSERT INTO quizzes (course_id, lesson_id, title, pass_percentage) VALUES (?, ?, ?, 60)");
     $insertQuestion = $conn->prepare("INSERT INTO quiz_questions (quiz_id, question_text, option_a, option_b, option_c, option_d, correct_option) VALUES (?, ?, ?, ?, ?, ?, ?)");
 
-    while ($row = $missingQuizzes->fetch_assoc()) {
+    while ($row = $lessonQuizRows->fetch_assoc()) {
         $courseId = (int)$row['course_id'];
         $lessonId = (int)$row['lesson_id'];
+        $orderNum = (int)$row['order_num'];
         $lessonTitle = $row['lesson_title'];
         $courseTitle = $row['course_title'];
         $quizTitle = 'Quiz: ' . $lessonTitle;
+        $quizId = (int)($row['quiz_id'] ?? 0);
 
-        $insertQuiz->bind_param("iis", $courseId, $lessonId, $quizTitle);
-        $insertQuiz->execute();
-        $quizId = (int)$conn->insert_id;
+        if ($quizId <= 0) {
+            $insertQuiz->bind_param("iis", $courseId, $lessonId, $quizTitle);
+            $insertQuiz->execute();
+            $quizId = (int)$conn->insert_id;
+        }
         if ($quizId <= 0) {
             continue;
         }
 
-        $questions = [
-            [
-                "What is the main objective of \"" . $lessonTitle . "\" in " . $courseTitle . "?",
-                "Understand and apply the key lesson concepts",
-                "Skip fundamentals and jump randomly",
-                "Only memorize definitions",
-                "Ignore practice activities",
-                "A",
-            ],
-            [
-                "Which approach gives the best learning result for this lesson?",
-                "Read once and avoid exercises",
-                "Practice examples and review mistakes",
-                "Only watch videos without action",
-                "Rely only on guesswork",
-                "B",
-            ],
-            [
-                "To complete this lesson effectively, you should:",
-                "Stop after the first concept",
-                "Avoid taking notes",
-                "Apply concepts in a small task or project",
-                "Skip all assessments",
-                "C",
-            ],
-        ];
+        $existingQuestionsRes = $conn->query("SELECT question_text FROM quiz_questions WHERE quiz_id=$quizId ORDER BY id");
+        $existingQuestions = $existingQuestionsRes ? $existingQuestionsRes->fetch_all(MYSQLI_ASSOC) : [];
+        $needsRefresh = count($existingQuestions) < 4 || isGenericQuizSet($existingQuestions);
 
-        foreach ($questions as $q) {
-            $insertQuestion->bind_param("issssss", $quizId, $q[0], $q[1], $q[2], $q[3], $q[4], $q[5]);
-            $insertQuestion->execute();
+        if ($needsRefresh) {
+            $conn->query("DELETE FROM quiz_questions WHERE quiz_id=$quizId");
+            $questions = buildLessonQuizQuestions($courseTitle, $lessonTitle, $orderNum, 'Lesson-specific understanding');
+            foreach ($questions as $q) {
+                $insertQuestion->bind_param("issssss", $quizId, $q[0], $q[1], $q[2], $q[3], $q[4], $q[5]);
+                $insertQuestion->execute();
+            }
         }
     }
 }
 
 function generateLessonContent($courseTitle, $lessonTitle, $orderNum, $focusLine) {
-    $concepts = getCourseConceptBlocks($courseTitle, $lessonTitle, $focusLine);
+    $concepts = getLessonSpecificConcepts($courseTitle, $lessonTitle, $orderNum, $focusLine);
     $content = "Lesson: " . $lessonTitle . "\n\n";
     $content .= "This lesson is part of \"" . $courseTitle . "\". It follows a practical format with numbered concepts and implementation-focused examples.\n\n";
 
@@ -386,6 +371,94 @@ function generateLessonContent($courseTitle, $lessonTitle, $orderNum, $focusLine
     $content .= "- Explain when to use each concept.\n";
     $content .= "- Complete the quiz to mark this lesson complete.\n";
     return $content;
+}
+
+function getLessonSpecificConcepts($courseTitle, $lessonTitle, $orderNum, $focusLine) {
+    $base = getCourseConceptBlocks($courseTitle, $lessonTitle, $focusLine);
+    if (empty($base)) {
+        return [];
+    }
+    $count = count($base);
+    $seed = abs(crc32(strtolower($lessonTitle))) % $count;
+    $start = (($orderNum - 1) + $seed) % $count;
+    $selected = [];
+    for ($i = 0; $i < min(5, $count); $i++) {
+        $selected[] = $base[($start + $i) % $count];
+    }
+    return $selected;
+}
+
+function buildLessonQuizQuestions($courseTitle, $lessonTitle, $orderNum, $focusLine) {
+    $concepts = getLessonSpecificConcepts($courseTitle, $lessonTitle, $orderNum, $focusLine);
+    while (count($concepts) < 4) {
+        $concepts[] = [
+            'title' => 'Core Practice',
+            'explain' => 'Apply the concept in practical workflow.',
+            'example' => 'Implement and validate expected output.',
+        ];
+    }
+    $c1 = $concepts[0];
+    $c2 = $concepts[1];
+    $c3 = $concepts[2];
+    $c4 = $concepts[3];
+
+    return [
+        [
+            "In \"" . $lessonTitle . "\", which concept should you apply first?",
+            $c1['title'],
+            $c2['title'],
+            $c3['title'],
+            $c4['title'],
+            "A",
+        ],
+        [
+            "What is the best approach for mastering \"" . $c2['title'] . "\" in this lesson?",
+            "Skip implementation and move to next lesson",
+            "Use a practical example and validate output",
+            "Only memorize terms",
+            "Avoid reviewing mistakes",
+            "B",
+        ],
+        [
+            "Which action aligns with \"" . $c3['title'] . "\" for " . $courseTitle . "?",
+            "Ignore data quality and edge cases",
+            "Avoid testing to save time",
+            "Implement, verify, and refine using feedback",
+            "Copy code without understanding",
+            "C",
+        ],
+        [
+            "After completing \"" . $lessonTitle . "\", what should you do next?",
+            "Skip quiz and mark complete manually",
+            "Move to random topic without review",
+            "Delete your practice notes",
+            "Take the lesson quiz and confirm understanding",
+            "D",
+        ],
+    ];
+}
+
+function isGenericQuizSet($rows) {
+    if (empty($rows)) {
+        return true;
+    }
+    $patterns = [
+        'main objective of',
+        'best learning result',
+        'complete this lesson effectively',
+        'improves mastery in this lesson',
+    ];
+    $hits = 0;
+    foreach ($rows as $row) {
+        $q = strtolower($row['question_text'] ?? '');
+        foreach ($patterns as $p) {
+            if (strpos($q, $p) !== false) {
+                $hits++;
+                break;
+            }
+        }
+    }
+    return $hits >= 2;
 }
 
 function getCourseConceptBlocks($courseTitle, $lessonTitle, $focusLine) {
