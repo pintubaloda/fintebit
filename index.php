@@ -3,16 +3,44 @@ define('INCLUDED', true);
 require_once 'includes/config.php';
 $pageTitle = 'Home';
 
+// If database isn't initialized yet, send users to setup flow.
+$coursesTable = $conn->query("SHOW TABLES LIKE 'courses'");
+if (!$coursesTable || $coursesTable->num_rows === 0) {
+    redirect('setup.php');
+}
+
+// Some deployments may still be on legacy schema briefly.
+$hasStatus = false;
+$columns = $conn->query("SHOW COLUMNS FROM courses");
+if ($columns) {
+    while ($col = $columns->fetch_assoc()) {
+        if ($col['Field'] === 'status') {
+            $hasStatus = true;
+            break;
+        }
+    }
+}
+$activeFilter = $hasStatus ? " WHERE status='active'" : "";
+
 // Get stats
-$totalCourses = $conn->query("SELECT COUNT(*) as c FROM courses WHERE status='active'")->fetch_assoc()['c'];
-$totalStudents = $conn->query("SELECT SUM(students_count) as c FROM courses")->fetch_assoc()['c'];
-$totalInstructors = $conn->query("SELECT COUNT(DISTINCT instructor) as c FROM courses")->fetch_assoc()['c'];
+$totalCoursesRes = $conn->query("SELECT COUNT(*) as c FROM courses" . $activeFilter);
+$totalCourses = $totalCoursesRes ? (int)$totalCoursesRes->fetch_assoc()['c'] : 0;
+$totalStudentsRes = $conn->query("SELECT SUM(students_count) as c FROM courses");
+$totalStudents = $totalStudentsRes ? (int)($totalStudentsRes->fetch_assoc()['c'] ?? 0) : 0;
+$totalInstructorsRes = $conn->query("SELECT COUNT(DISTINCT instructor) as c FROM courses");
+$totalInstructors = $totalInstructorsRes ? (int)$totalInstructorsRes->fetch_assoc()['c'] : 0;
 
 // Featured courses
-$featured = $conn->query("SELECT * FROM courses WHERE status='active' ORDER BY students_count DESC LIMIT 6");
+$featured = $conn->query("SELECT * FROM courses" . $activeFilter . " ORDER BY students_count DESC LIMIT 6");
+if (!$featured) {
+    $featured = $conn->query("SELECT * FROM courses ORDER BY id DESC LIMIT 6");
+}
 
 // Categories with count
 $categories = $conn->query("SELECT category, COUNT(*) as cnt FROM courses GROUP BY category ORDER BY cnt DESC LIMIT 8");
+if (!$categories) {
+    $categories = $conn->query("SELECT 'General' as category, 0 as cnt");
+}
 ?>
 <?php include 'includes/header.php'; ?>
 
