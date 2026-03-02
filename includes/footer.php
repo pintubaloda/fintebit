@@ -29,15 +29,7 @@
           <a href="<?= SITE_URL ?>/contact.php" style="color:var(--text-muted);font-size:0.875rem">Contact Us</a>
           <a href="<?= SITE_URL ?>/privacy-policy.php" style="color:var(--text-muted);font-size:0.875rem">Privacy Policy</a>
           <a href="<?= SITE_URL ?>/terms-and-conditions.php" style="color:var(--text-muted);font-size:0.875rem">Terms &amp; Conditions</a>
-        </div>
-      </div>
-      <div>
-        <h4 style="font-size:0.9rem;margin-bottom:1rem;color:var(--text)">Support</h4>
-        <div style="display:flex;flex-direction:column;gap:0.5rem;">
-          <a href="<?= SITE_URL ?>/courses.php" style="color:var(--text-muted);font-size:0.875rem">Help Center</a>
-          <a href="<?= SITE_URL ?>/contact.php" style="color:var(--text-muted);font-size:0.875rem">Contact Us</a>
-          <a href="<?= SITE_URL ?>/privacy-policy.php" style="color:var(--text-muted);font-size:0.875rem">Privacy Policy</a>
-          <a href="<?= SITE_URL ?>/terms-and-conditions.php" style="color:var(--text-muted);font-size:0.875rem">Terms of Service</a>
+          <a href="<?= SITE_URL ?>/refund-policy.php" style="color:var(--text-muted);font-size:0.875rem">Refund Policy</a>
         </div>
       </div>
     </div>
