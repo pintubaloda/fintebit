@@ -123,6 +123,42 @@ if ($youtubeUrl !== '') {
         $youtubeSearchUrl = $youtubeUrl;
     }
 }
+
+$videoMode = isset($_GET['video']) && $_GET['video'] === '1';
+if ($videoMode) {
+    include '../includes/header.php';
+    ?>
+    <div style="padding:1rem 0;">
+      <div class="container" style="max-width:1200px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:0.8rem;">
+          <h2 style="font-size:1.1rem;font-weight:700;margin:0;">Video: <?= htmlspecialchars($currentLesson['title'] ?? 'Lesson') ?></h2>
+          <a href="learn.php?course=<?= $courseId ?>&lesson=<?= (int)($currentLesson['id'] ?? 0) ?>&page=<?= (int)$currentPageNo ?>" class="btn btn-ghost btn-sm"><i class="fas fa-arrow-left"></i> Back to Lesson</a>
+        </div>
+
+        <?php if ($youtubeEmbedUrl !== ''): ?>
+          <div style="position:relative;height:calc(100vh - 190px);min-height:500px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:#000;">
+            <iframe
+              src="<?= htmlspecialchars($youtubeEmbedUrl) ?>"
+              title="Lesson YouTube Video"
+              style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowfullscreen>
+            </iframe>
+          </div>
+        <?php else: ?>
+          <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:1rem;">
+            <p style="margin:0;color:var(--text-muted);">This lesson does not have a direct YouTube video URL yet, so full-screen embed is not available.</p>
+            <?php if ($youtubeSearchUrl !== ''): ?>
+              <a href="<?= htmlspecialchars($youtubeSearchUrl) ?>" target="_blank" rel="noopener" class="btn btn-accent btn-sm" style="margin-top:0.7rem;"><i class="fab fa-youtube"></i> Open Video Results</a>
+            <?php endif; ?>
+          </div>
+        <?php endif; ?>
+      </div>
+    </div>
+    <?php
+    include '../includes/footer.php';
+    exit;
+}
 ?>
 <?php include '../includes/header.php'; ?>
 <style>
@@ -190,7 +226,10 @@ if ($youtubeUrl !== '') {
 
     <?php if($youtubeEmbedUrl !== ''): ?>
     <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:1rem;margin-bottom:1rem;">
-      <h3 style="font-size:0.95rem;font-weight:700;margin-bottom:0.7rem"><i class="fab fa-youtube" style="color:#ff3b30"></i> Lesson Video</h3>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:0.7rem;">
+        <h3 style="font-size:0.95rem;font-weight:700;margin:0;"><i class="fab fa-youtube" style="color:#ff3b30"></i> Lesson Video</h3>
+        <a href="learn.php?course=<?=$courseId?>&lesson=<?=(int)$currentLesson['id']?>&page=<?=$currentPageNo?>&video=1" class="btn btn-accent btn-sm"><i class="fas fa-expand"></i> Open Video Screen</a>
+      </div>
       <div style="position:relative;padding-top:56.25%;border-radius:10px;overflow:hidden;background:#000;">
         <iframe
           src="<?= htmlspecialchars($youtubeEmbedUrl) ?>"
