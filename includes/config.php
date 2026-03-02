@@ -206,6 +206,14 @@ function ensureSchemaCompatibility($conn) {
         passed TINYINT(1) DEFAULT 0,
         attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
+    $conn->query("CREATE TABLE IF NOT EXISTS lesson_pages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        lesson_id INT NOT NULL,
+        page_no INT NOT NULL,
+        page_title VARCHAR(255) NOT NULL,
+        page_content LONGTEXT NOT NULL,
+        UNIQUE KEY uniq_lesson_page (lesson_id, page_no)
+    )");
 
     if ($conn->query("SHOW TABLES LIKE 'lessons'")->num_rows) {
         $lessonColumns = [];
@@ -217,8 +225,28 @@ function ensureSchemaCompatibility($conn) {
             $conn->query("ALTER TABLE lessons ADD COLUMN is_preview TINYINT(1) DEFAULT 0");
         }
 
-        seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns);
+        $conn->query("CREATE TABLE IF NOT EXISTS app_meta (
+            meta_key VARCHAR(100) PRIMARY KEY,
+            meta_value TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )");
+        runContentMigrationIfNeeded($conn, $courseColumns, $lessonColumns);
     }
+}
+
+function runContentMigrationIfNeeded($conn, $courseColumns, $lessonColumns) {
+    $contentVersion = 'content_v4';
+    $meta = $conn->query("SELECT meta_value FROM app_meta WHERE meta_key='content_version' LIMIT 1");
+    $current = ($meta && $meta->num_rows > 0) ? $meta->fetch_assoc()['meta_value'] : '';
+
+    if ($current === $contentVersion) {
+        return;
+    }
+
+    seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns);
+    $stmt = $conn->prepare("INSERT INTO app_meta (meta_key, meta_value) VALUES ('content_version', ?) ON DUPLICATE KEY UPDATE meta_value=VALUES(meta_value)");
+    $stmt->bind_param("s", $contentVersion);
+    $stmt->execute();
 }
 
 function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
@@ -259,6 +287,10 @@ function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
                 $preview = $order === 1 ? 1 : 0;
                 $insertLesson->bind_param("isssii", $courseId, $title, $content, $duration, $order, $preview);
                 $insertLesson->execute();
+                $newLessonId = (int)$conn->insert_id;
+                if ($newLessonId > 0) {
+                    storeLessonPages($conn, $newLessonId, buildLessonPages($courseTitle, $title, $order, $template[1]));
+                }
                 $order++;
             }
             $lessonCount = count($templates);
@@ -285,6 +317,7 @@ function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
             $newContent = generateLessonContent($courseTitle, $lesson['title'], (int)$lesson['order_num'], 'Practical lesson content');
             $updateLesson->bind_param("si", $newContent, $lessonId);
             $updateLesson->execute();
+            storeLessonPages($conn, $lessonId, buildLessonPages($courseTitle, $lesson['title'], (int)$lesson['order_num'], 'Practical lesson content'));
 
             // Keep a high-detail custom example for JavaScript ES6+ core lesson.
             if (
@@ -294,6 +327,7 @@ function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
                 $es6Content = getJavascriptEs6CoreLessonContent();
                 $updateLesson->bind_param("si", $es6Content, $lessonId);
                 $updateLesson->execute();
+                storeLessonPages($conn, $lessonId, buildPagesFromContent($es6Content));
             }
         }
     }
@@ -339,27 +373,85 @@ function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
 }
 
 function generateLessonContent($courseTitle, $lessonTitle, $orderNum, $focusLine) {
+    $pages = buildLessonPages($courseTitle, $lessonTitle, $orderNum, $focusLine);
+    $first = isset($pages[0]) ? $pages[0]['content'] : '';
+    return $first;
+}
+
+function buildLessonPages($courseTitle, $lessonTitle, $orderNum, $focusLine) {
     $concepts = getLessonSpecificConcepts($courseTitle, $lessonTitle, $orderNum, $focusLine);
     $stage = getLessonStageName($orderNum);
-    $content = "Lesson: " . $lessonTitle . "\n\n";
-    $content .= "Course: " . $courseTitle . "\n";
-    $content .= "Stage: " . $stage . " (Module " . (int)$orderNum . ")\n\n";
-    $content .= "This lesson is tailored to the module stage and topic, with numbered concepts and implementation-focused examples.\n\n";
+    $intro = "Lesson: " . $lessonTitle . "\n\n";
+    $intro .= "Course: " . $courseTitle . "\n";
+    $intro .= "Stage: " . $stage . " (Module " . (int)$orderNum . ")\n\n";
+    $intro .= "This lesson is tailored to this module with concept-focused explanations and practical examples.\n\n";
 
-    $index = 1;
-    foreach ($concepts as $block) {
-        $content .= $index . ") " . $block['title'] . "\n";
-        $content .= $block['explain'] . "\n\n";
-        $content .= "Example:\n" . $block['example'] . "\n\n";
-        $index++;
+    $page1 = $intro;
+    $page2 = "";
+    $page3 = "";
+    foreach ($concepts as $idx => $block) {
+        $line = ($idx + 1) . ") " . $block['title'] . "\n";
+        $line .= $block['explain'] . "\n\n";
+        $line .= "Example:\n" . $block['example'] . "\n\n";
+        if ($idx < 2) {
+            $page1 .= $line;
+        } elseif ($idx < 4) {
+            $page2 .= $line;
+        } else {
+            $page3 .= $line;
+        }
     }
+    if ($page2 === '') {
+        $page2 = "Implementation Focus:\nApply page 1 ideas in a mini practical scenario for " . $courseTitle . ".";
+    }
+    if ($page3 === '') {
+        $page3 = "Consolidation:\nReview key learning outcomes from this lesson.";
+    }
+    $page3 .= "\n\nPractice Checklist:\n";
+    $page3 .= "- Implement one example without copying.\n";
+    $page3 .= "- Explain why each concept is used.\n";
+    $page3 .= "- Complete the quiz to mark lesson completion.\n";
 
-    $content .= "Practice Checklist:\n";
-    $content .= "- Implement one example without copying.\n";
-    $content .= "- Explain when to use each concept.\n";
-    $content .= "- Write one lesson-specific note for \"" . $lessonTitle . "\".\n";
-    $content .= "- Complete the quiz to mark this lesson complete.\n";
-    return $content;
+    return [
+        ['title' => 'Concept Foundations', 'content' => $page1],
+        ['title' => 'Guided Implementation', 'content' => $page2],
+        ['title' => 'Review and Readiness', 'content' => $page3],
+    ];
+}
+
+function buildPagesFromContent($content) {
+    $parts = preg_split('/\n\s*\[\[PAGE_BREAK\]\]\s*\n/', (string)$content);
+    $pages = [];
+    $i = 1;
+    foreach ($parts as $part) {
+        $text = trim((string)$part);
+        if ($text === '') {
+            continue;
+        }
+        $pages[] = [
+            'title' => 'Lesson Page ' . $i,
+            'content' => $text,
+        ];
+        $i++;
+    }
+    return $pages;
+}
+
+function storeLessonPages($conn, $lessonId, $pages) {
+    if ((int)$lessonId <= 0 || empty($pages)) {
+        return;
+    }
+    $lessonId = (int)$lessonId;
+    $conn->query("DELETE FROM lesson_pages WHERE lesson_id=$lessonId");
+    $insert = $conn->prepare("INSERT INTO lesson_pages (lesson_id, page_no, page_title, page_content) VALUES (?, ?, ?, ?)");
+    $pageNo = 1;
+    foreach ($pages as $page) {
+        $title = $page['title'] ?? ('Lesson Page ' . $pageNo);
+        $content = $page['content'] ?? '';
+        $insert->bind_param("iiss", $lessonId, $pageNo, $title, $content);
+        $insert->execute();
+        $pageNo++;
+    }
 }
 
 function getLessonStageName($orderNum) {
@@ -564,6 +656,8 @@ const updatedUser = { ...user, role: "Admin" };
 
 Important for immutable state updates (React, Redux, etc.).
 
+[[PAGE_BREAK]]
+
 6) Default Parameters
 function greet(name = "Guest") {
   return `Hello ${name}`;
@@ -590,6 +684,8 @@ const fetchData = () => {
 fetchData()
   .then(data => console.log(data))
   .catch(error => console.error(error));
+
+[[PAGE_BREAK]]
 
 9) Async / Await
 const fetchData = async () => {

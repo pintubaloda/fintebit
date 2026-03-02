@@ -77,6 +77,41 @@ if ($currentLesson) {
     }
 }
 $color = getCategoryColor($course['category']);
+
+$lessonPages = [];
+$currentPageNo = (int)($_GET['page'] ?? 1);
+if ($currentLesson) {
+    $lessonPageRes = $conn->query("SELECT page_no, page_title, page_content FROM lesson_pages WHERE lesson_id=" . (int)$currentLesson['id'] . " ORDER BY page_no ASC");
+    if ($lessonPageRes && $lessonPageRes->num_rows > 0) {
+        while ($pg = $lessonPageRes->fetch_assoc()) {
+            $lessonPages[] = [
+                'no' => (int)$pg['page_no'],
+                'title' => $pg['page_title'],
+                'content' => $pg['page_content'],
+            ];
+        }
+    } else {
+        $fallback = trim((string)$currentLesson['content']);
+        $parts = preg_split('/\n\s*\[\[PAGE_BREAK\]\]\s*\n/', $fallback);
+        $n = 1;
+        foreach ($parts as $part) {
+            $text = trim((string)$part);
+            if ($text === '') {
+                continue;
+            }
+            $lessonPages[] = [
+                'no' => $n,
+                'title' => 'Lesson Page ' . $n,
+                'content' => $text,
+            ];
+            $n++;
+        }
+    }
+}
+$totalPages = max(1, count($lessonPages));
+if ($currentPageNo < 1) $currentPageNo = 1;
+if ($currentPageNo > $totalPages) $currentPageNo = $totalPages;
+$activePage = isset($lessonPages[$currentPageNo - 1]) ? $lessonPages[$currentPageNo - 1] : ['title' => 'Lesson Content', 'content' => (string)($currentLesson['content'] ?? '')];
 ?>
 <?php include '../includes/header.php'; ?>
 <style>
@@ -130,6 +165,17 @@ $color = getCategoryColor($course['category']);
         <div style="font-size:0.78rem;color:var(--gold);"><i class="fas fa-clock"></i> <?= htmlspecialchars($currentLesson['duration'] ?: 'Self-paced') ?></div>
       </div>
     </div>
+
+    <?php if($totalPages > 1): ?>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:0.8rem;flex-wrap:wrap;margin-bottom:1rem;">
+      <div style="font-size:0.78rem;color:var(--text-muted);">Content Page <?= $currentPageNo ?> of <?= $totalPages ?></div>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <?php for($p=1;$p<=$totalPages;$p++): ?>
+          <a href="learn.php?course=<?=$courseId?>&lesson=<?=$currentLesson['id']?>&page=<?=$p?>" class="btn <?=$p===$currentPageNo?'btn-accent':'btn-ghost'?> btn-sm"><?=$p?></a>
+        <?php endfor; ?>
+      </div>
+    </div>
+    <?php endif; ?>
     
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;flex-wrap:wrap;gap:1rem;">
       <h1 style="font-size:1.5rem;font-weight:800"><?=htmlspecialchars($currentLesson['title'])?></h1>
@@ -146,10 +192,10 @@ $color = getCategoryColor($course['category']);
       <?php endif; ?>
     </div>
     
-    <?php if($currentLesson['content']): ?>
+    <?php if($activePage['content']): ?>
     <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:1.5rem;margin-bottom:1.5rem;">
-      <h3 style="font-size:1rem;font-weight:700;margin-bottom:0.8rem"><i class="fas fa-book-open" style="color:var(--accent)"></i> Lesson Content</h3>
-      <pre style="margin:0;color:var(--text-muted);line-height:1.8;font-size:0.9rem;white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;"><?=htmlspecialchars($currentLesson['content'])?></pre>
+      <h3 style="font-size:1rem;font-weight:700;margin-bottom:0.8rem"><i class="fas fa-book-open" style="color:var(--accent)"></i> <?= htmlspecialchars($activePage['title']) ?></h3>
+      <pre style="margin:0;color:var(--text-muted);line-height:1.8;font-size:0.9rem;white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;"><?=htmlspecialchars($activePage['content'])?></pre>
     </div>
     <?php else: ?>
     <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:1.5rem;margin-bottom:1.5rem;">
