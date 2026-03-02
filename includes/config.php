@@ -238,7 +238,7 @@ function ensureSchemaCompatibility($conn) {
 }
 
 function runContentMigrationIfNeeded($conn, $courseColumns, $lessonColumns) {
-    $contentVersion = 'content_v5';
+    $contentVersion = 'content_v6';
     $meta = $conn->query("SELECT meta_value FROM app_meta WHERE meta_key='content_version' LIMIT 1");
     $current = ($meta && $meta->num_rows > 0) ? $meta->fetch_assoc()['meta_value'] : '';
 
@@ -315,12 +315,24 @@ function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
         $existingLessons->execute();
         $rows = $existingLessons->get_result();
         $updateLesson = $conn->prepare("UPDATE lessons SET content=? WHERE id=?");
+        $updateLessonVideo = $conn->prepare("UPDATE lessons SET youtube_url=? WHERE id=?");
         while ($lesson = $rows->fetch_assoc()) {
             $lessonId = (int)$lesson['id'];
             $newContent = generateLessonContent($courseTitle, $lesson['title'], (int)$lesson['order_num'], 'Practical lesson content');
             $updateLesson->bind_param("si", $newContent, $lessonId);
             $updateLesson->execute();
             storeLessonPages($conn, $lessonId, buildLessonPages($courseTitle, $lesson['title'], (int)$lesson['order_num'], 'Practical lesson content'));
+
+            $videoRes = $conn->query("SELECT youtube_url FROM lessons WHERE id=$lessonId LIMIT 1");
+            $youtubeUrl = '';
+            if ($videoRes && $videoRes->num_rows > 0) {
+                $youtubeUrl = trim((string)$videoRes->fetch_assoc()['youtube_url']);
+            }
+            if ($youtubeUrl === '' || strpos($youtubeUrl, 'youtube.com/results?search_query=') !== false) {
+                $autoVideoUrl = buildYoutubeSearchUrl($courseTitle, $lesson['title']);
+                $updateLessonVideo->bind_param("si", $autoVideoUrl, $lessonId);
+                $updateLessonVideo->execute();
+            }
 
             // Keep a high-detail custom example for JavaScript ES6+ core lesson.
             if (
@@ -564,6 +576,11 @@ function getTrackLabTask($track, $courseTitle, $lessonTitle) {
         default:
             return "Implement one real example from \"" . $lessonTitle . "\", validate output, and write a short improvement note.";
     }
+}
+
+function buildYoutubeSearchUrl($courseTitle, $lessonTitle) {
+    $query = trim($courseTitle . ' ' . $lessonTitle . ' tutorial');
+    return 'https://www.youtube.com/results?search_query=' . rawurlencode($query);
 }
 
 function buildPagesFromContent($content) {

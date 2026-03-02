@@ -115,9 +115,12 @@ $activePage = isset($lessonPages[$currentPageNo - 1]) ? $lessonPages[$currentPag
 
 $youtubeUrl = trim((string)($currentLesson['youtube_url'] ?? ''));
 $youtubeEmbedUrl = '';
+$youtubeSearchUrl = '';
 if ($youtubeUrl !== '') {
     if (preg_match('/(?:v=|youtu\\.be\\/|embed\\/)([A-Za-z0-9_-]{11})/', $youtubeUrl, $m)) {
         $youtubeEmbedUrl = 'https://www.youtube.com/embed/' . $m[1];
+    } else {
+        $youtubeSearchUrl = $youtubeUrl;
     }
 }
 ?>
@@ -197,6 +200,11 @@ if ($youtubeUrl !== '') {
           allowfullscreen>
         </iframe>
       </div>
+    </div>
+    <?php elseif($youtubeSearchUrl !== ''): ?>
+    <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:0.9rem 1rem;margin-bottom:1rem;font-size:0.82rem;color:var(--text-muted);display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+      <span>Auto-selected YouTube search for this lesson video.</span>
+      <a href="<?= htmlspecialchars($youtubeSearchUrl) ?>" target="_blank" rel="noopener" class="btn btn-accent btn-sm"><i class="fab fa-youtube"></i> Open Video Results</a>
     </div>
     <?php else: ?>
     <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:0.9rem 1rem;margin-bottom:1rem;font-size:0.82rem;color:var(--text-muted);">
