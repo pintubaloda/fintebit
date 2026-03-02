@@ -167,6 +167,15 @@ function ensureSchemaCompatibility($conn) {
         payment_status ENUM('pending','completed','failed') DEFAULT 'completed',
         ordered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
+    $conn->query("CREATE TABLE IF NOT EXISTS contact_messages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(120) NOT NULL,
+        email VARCHAR(190) NOT NULL,
+        subject VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        status ENUM('new','reviewed','closed') DEFAULT 'new',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )");
     $conn->query("CREATE TABLE IF NOT EXISTS lesson_progress (
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
