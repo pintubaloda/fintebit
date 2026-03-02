@@ -149,7 +149,7 @@ $color = getCategoryColor($course['category']);
     <?php if($currentLesson['content']): ?>
     <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:1.5rem;margin-bottom:1.5rem;">
       <h3 style="font-size:1rem;font-weight:700;margin-bottom:0.8rem"><i class="fas fa-book-open" style="color:var(--accent)"></i> Lesson Content</h3>
-      <p style="color:var(--text-muted);line-height:1.8;font-size:0.9rem"><?=nl2br(htmlspecialchars($currentLesson['content']))?></p>
+      <pre style="margin:0;color:var(--text-muted);line-height:1.8;font-size:0.9rem;white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;"><?=htmlspecialchars($currentLesson['content'])?></pre>
     </div>
     <?php else: ?>
     <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:1.5rem;margin-bottom:1.5rem;">

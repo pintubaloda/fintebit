@@ -291,6 +291,17 @@ function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
                 $updateLesson->bind_param("si", $newContent, $lessonId);
                 $updateLesson->execute();
             }
+
+            // Apply a high-detail example lesson for JavaScript ES6+ core lesson.
+            if (
+                stripos($courseTitle, 'JavaScript ES6+') !== false &&
+                stripos($lesson['title'], 'Core') !== false
+            ) {
+                $lessonId = (int)$lesson['id'];
+                $es6Content = getJavascriptEs6CoreLessonContent();
+                $updateLesson->bind_param("si", $es6Content, $lessonId);
+                $updateLesson->execute();
+            }
         }
     }
 
@@ -384,4 +395,90 @@ function generateLessonContent($courseTitle, $lessonTitle, $orderNum, $focusLine
         "- You can identify at least one optimization or improvement.\n\n" .
         "Next step:\n" .
         "Attempt the lesson quiz and pass it to mark this lesson complete.";
+}
+
+function getJavascriptEs6CoreLessonContent() {
+    return
+        "Lesson: Core Concepts of JavaScript ES6+\n\n" .
+        "JavaScript ES6 (ECMAScript 2015) introduced major improvements that modernized the language. " .
+        "If you're building SaaS platforms, APIs, and real-time systems, understanding ES6+ is essential for frontend apps, Node.js services, and modern frameworks.\n\n" .
+        "1) let and const (Block Scope)\n" .
+        "Before ES6, var had function scope and often caused bugs.\n\n" .
+        "let (can be reassigned)\n" .
+        "let count = 5;\n" .
+        "count = 10; // allowed\n\n" .
+        "const (cannot be reassigned)\n" .
+        "const apiUrl = \"https://api.example.com\";\n" .
+        "// apiUrl = \"newurl\"; // Error\n\n" .
+        "Key Difference:\n" .
+        "- var -> function scoped\n" .
+        "- let and const -> block scoped { }\n" .
+        "- Prefer const by default\n\n" .
+        "2) Arrow Functions (=>)\n" .
+        "Traditional function:\n" .
+        "function add(a, b) {\n" .
+        "  return a + b;\n" .
+        "}\n\n" .
+        "ES6 arrow function:\n" .
+        "const add = (a, b) => a + b;\n\n" .
+        "Arrow functions do not bind their own this, making them great for callbacks.\n\n" .
+        "3) Template Literals (Backticks)\n" .
+        "const name = \"Rakesh\";\n" .
+        "const message = `Hello, ${name}! Welcome to ES6.`;\n\n" .
+        "Benefits: cleaner dynamic strings, interpolation, multi-line support.\n\n" .
+        "4) Destructuring\n" .
+        "Array destructuring:\n" .
+        "const numbers = [1, 2, 3];\n" .
+        "const [a, b] = numbers;\n\n" .
+        "Object destructuring:\n" .
+        "const user = { id: 1, name: \"Rakesh\" };\n" .
+        "const { id, name } = user;\n\n" .
+        "Very useful in APIs and frontend frameworks.\n\n" .
+        "5) Spread Operator (...)\n" .
+        "Array example:\n" .
+        "const arr1 = [1, 2];\n" .
+        "const arr2 = [...arr1, 3, 4];\n\n" .
+        "Object example:\n" .
+        "const user = { name: \"Rakesh\" };\n" .
+        "const updatedUser = { ...user, role: \"Admin\" };\n\n" .
+        "Important for immutable state updates (React, Redux, etc.).\n\n" .
+        "6) Default Parameters\n" .
+        "function greet(name = \"Guest\") {\n" .
+        "  return `Hello ${name}`;\n" .
+        "}\n\n" .
+        "If no value is passed, default is used.\n\n" .
+        "7) Modules (import / export)\n" .
+        "Export:\n" .
+        "export const sum = (a, b) => a + b;\n\n" .
+        "Import:\n" .
+        "import { sum } from './math.js';\n\n" .
+        "Essential for scalable architecture.\n\n" .
+        "8) Promises (Asynchronous Programming)\n" .
+        "const fetchData = () => {\n" .
+        "  return new Promise((resolve, reject) => {\n" .
+        "    resolve(\"Data received\");\n" .
+        "  });\n" .
+        "};\n\n" .
+        "fetchData()\n" .
+        "  .then(data => console.log(data))\n" .
+        "  .catch(error => console.error(error));\n\n" .
+        "9) Async / Await\n" .
+        "const fetchData = async () => {\n" .
+        "  return \"Data received\";\n" .
+        "};\n\n" .
+        "async function run() {\n" .
+        "  const data = await fetchData();\n" .
+        "  console.log(data);\n" .
+        "}\n\n" .
+        "Cleaner syntax and easier error handling with try/catch.\n\n" .
+        "10) Classes\n" .
+        "class User {\n" .
+        "  constructor(name) {\n" .
+        "    this.name = name;\n" .
+        "  }\n\n" .
+        "  greet() {\n" .
+        "    return `Hello ${this.name}`;\n" .
+        "  }\n" .
+        "}\n\n" .
+        "const user1 = new User(\"Rakesh\");";
 }
