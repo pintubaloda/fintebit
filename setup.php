@@ -61,6 +61,45 @@ $tables = [
     payment_status ENUM('pending','completed','failed') DEFAULT 'completed',
     ordered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )",
+"CREATE TABLE IF NOT EXISTS lesson_progress (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    lesson_id INT NOT NULL,
+    course_id INT NOT NULL,
+    completed TINYINT(1) DEFAULT 1,
+    completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_progress (user_id, lesson_id, course_id)
+)",
+"CREATE TABLE IF NOT EXISTS quizzes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    course_id INT NOT NULL,
+    lesson_id INT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    pass_percentage INT DEFAULT 60,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_lesson_quiz (lesson_id)
+)",
+"CREATE TABLE IF NOT EXISTS quiz_questions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    quiz_id INT NOT NULL,
+    question_text TEXT NOT NULL,
+    option_a VARCHAR(255) NOT NULL,
+    option_b VARCHAR(255) NOT NULL,
+    option_c VARCHAR(255) NOT NULL,
+    option_d VARCHAR(255) NOT NULL,
+    correct_option CHAR(1) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)",
+"CREATE TABLE IF NOT EXISTS quiz_attempts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    quiz_id INT NOT NULL,
+    score INT NOT NULL,
+    total_questions INT NOT NULL,
+    percentage DECIMAL(5,2) NOT NULL,
+    passed TINYINT(1) DEFAULT 0,
+    attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)",
 "CREATE TABLE IF NOT EXISTS reviews (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT,
@@ -121,20 +160,77 @@ foreach ($courses as $c) {
     $stmt->execute();
 }
 
-// Insert sample lessons for first course
+// Insert sample lessons for all courses
 $conn->query("DELETE FROM lessons");
-$sampleLessons = [
-    [1, "Introduction to Excel Interface", "Learn the Excel interface, ribbons, and basic navigation.", "15 min", 1],
-    [1, "Working with Cells and Data", "Enter, edit, and format data in cells effectively.", "20 min", 2],
-    [1, "Basic Formulas and Functions", "SUM, AVERAGE, COUNT, and essential formulas.", "25 min", 3],
-    [1, "Charts and Visualizations", "Create professional charts and graphs.", "30 min", 4],
-    [1, "Pivot Tables Mastery", "Analyze data with powerful pivot tables.", "35 min", 5],
+$lessonTemplates = [
+    ["Getting Started", "Understand the fundamentals and learning path for this course."],
+    ["Core Concepts", "Master the key concepts required to build strong foundations."],
+    ["Practical Application", "Apply concepts using real-world examples and exercises."],
+    ["Advanced Techniques", "Learn higher-level methods and optimization strategies."],
+    ["Summary and Project", "Consolidate learning through revision and a mini project."],
 ];
 
-foreach ($sampleLessons as $l) {
-    $stmt = $conn->prepare("INSERT INTO lessons (course_id, title, content, duration, order_num) VALUES (?,?,?,?,?)");
-    $stmt->bind_param("isssi", $l[0], $l[1], $l[2], $l[3], $l[4]);
-    $stmt->execute();
+$allCourseRows = $conn->query("SELECT id, title FROM courses ORDER BY id ASC");
+$lessonInsert = $conn->prepare("INSERT INTO lessons (course_id, title, content, duration, order_num, is_preview) VALUES (?,?,?,?,?,?)");
+while ($allCourseRows && ($cr = $allCourseRows->fetch_assoc())) {
+    $cid = (int)$cr['id'];
+    $ctitle = $cr['title'];
+    $idx = 1;
+    foreach ($lessonTemplates as $tpl) {
+        $ltitle = $tpl[0] . ": " . $ctitle;
+        $lcontent = $tpl[1] . " This lesson is part of \"" . $ctitle . "\" and should be practiced with examples.";
+        $duration = (string)(10 + $idx * 5) . " min";
+        $preview = $idx === 1 ? 1 : 0;
+        $lessonInsert->bind_param("isssii", $cid, $ltitle, $lcontent, $duration, $idx, $preview);
+        $lessonInsert->execute();
+        $idx++;
+    }
+}
+
+// Seed quizzes and questions for each lesson
+$conn->query("DELETE FROM quiz_questions");
+$conn->query("DELETE FROM quizzes");
+$lessonRows = $conn->query("SELECT l.id, l.course_id, l.title, c.title as course_title FROM lessons l JOIN courses c ON c.id=l.course_id ORDER BY l.course_id, l.order_num");
+$quizInsert = $conn->prepare("INSERT INTO quizzes (course_id, lesson_id, title, pass_percentage) VALUES (?,?,?,60)");
+$questionInsert = $conn->prepare("INSERT INTO quiz_questions (quiz_id, question_text, option_a, option_b, option_c, option_d, correct_option) VALUES (?,?,?,?,?,?,?)");
+while ($lessonRows && ($lr = $lessonRows->fetch_assoc())) {
+    $lessonId = (int)$lr['id'];
+    $courseId = (int)$lr['course_id'];
+    $quizTitle = "Quiz: " . $lr['title'];
+    $quizInsert->bind_param("iis", $courseId, $lessonId, $quizTitle);
+    $quizInsert->execute();
+    $quizId = (int)$conn->insert_id;
+
+    $qs = [
+        [
+            "What is the main objective of \"" . $lr['title'] . "\"?",
+            "Understand and apply core concepts",
+            "Skip practice and examples",
+            "Avoid fundamentals",
+            "Only read headings",
+            "A",
+        ],
+        [
+            "Which approach improves mastery in this lesson?",
+            "Memorize without implementation",
+            "Practice and review errors",
+            "Avoid feedback",
+            "Skip assessments",
+            "B",
+        ],
+        [
+            "What should you do after finishing this lesson?",
+            "Move on without revision",
+            "Ignore important points",
+            "Summarize and apply in a small task",
+            "Repeat mistakes without checks",
+            "C",
+        ],
+    ];
+    foreach ($qs as $q) {
+        $questionInsert->bind_param("issssss", $quizId, $q[0], $q[1], $q[2], $q[3], $q[4], $q[5]);
+        $questionInsert->execute();
+    }
 }
 
 echo "<div style='font-family:sans-serif;padding:40px;background:#0f172a;color:#fff;min-height:100vh'>

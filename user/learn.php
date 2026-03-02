@@ -43,6 +43,30 @@ $r=$conn->query("SELECT lesson_id FROM lesson_progress WHERE user_id={$_SESSION[
 if ($r) {
     while($row=$r->fetch_assoc()) $completed[]=$row['lesson_id'];
 }
+
+$quizByLesson = [];
+if (!empty($allLessons)) {
+    $lessonIds = array_map(function($l){ return (int)$l['id']; }, $allLessons);
+    $idList = implode(',', $lessonIds);
+    $quizRes = $conn->query("
+        SELECT q.id, q.lesson_id, q.pass_percentage,
+               MAX(CASE WHEN qa.user_id={$_SESSION['user_id']} AND qa.passed=1 THEN 1 ELSE 0 END) AS passed
+        FROM quizzes q
+        LEFT JOIN quiz_attempts qa ON qa.quiz_id=q.id
+        WHERE q.lesson_id IN ($idList)
+        GROUP BY q.id, q.lesson_id, q.pass_percentage
+    ");
+    if ($quizRes) {
+        while ($q = $quizRes->fetch_assoc()) {
+            $quizByLesson[(int)$q['lesson_id']] = [
+                'id' => (int)$q['id'],
+                'pass_percentage' => (int)$q['pass_percentage'],
+                'passed' => (int)$q['passed'] === 1,
+            ];
+        }
+    }
+}
+$currentQuiz = $currentLesson ? ($quizByLesson[(int)$currentLesson['id']] ?? null) : null;
 $color = getCategoryColor($course['category']);
 ?>
 <?php include '../includes/header.php'; ?>
@@ -77,7 +101,12 @@ $color = getCategoryColor($course['category']);
       </div>
       <div style="flex:1;min-width:0">
         <div style="font-size:0.8rem;font-weight:<?=$isActive?'600':'400'?>;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><?=htmlspecialchars($l['title'])?></div>
-        <?php if($l['duration']): ?><div style="font-size:0.7rem;color:var(--text-muted)"><?=$l['duration']?></div><?php endif; ?>
+        <div style="display:flex;align-items:center;gap:0.45rem;">
+          <?php if($l['duration']): ?><div style="font-size:0.7rem;color:var(--text-muted)"><?=$l['duration']?></div><?php endif; ?>
+          <?php if(isset($quizByLesson[(int)$l['id']])): ?>
+            <span style="font-size:0.62rem;border:1px solid rgba(255,255,255,0.2);border-radius:999px;padding:0.1rem 0.45rem;color:<?= $quizByLesson[(int)$l['id']]['passed'] ? 'var(--success)' : 'var(--gold)' ?>;">Quiz</span>
+          <?php endif; ?>
+        </div>
       </div>
     </a>
     <?php endforeach; ?>
@@ -99,7 +128,13 @@ $color = getCategoryColor($course['category']);
     
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;flex-wrap:wrap;gap:1rem;">
       <h1 style="font-size:1.5rem;font-weight:800"><?=htmlspecialchars($currentLesson['title'])?></h1>
-      <?php if(!in_array($currentLesson['id'],$completed)): ?>
+      <?php if($currentQuiz): ?>
+        <?php if($currentQuiz['passed']): ?>
+          <span class="badge" style="background:rgba(16,185,129,0.15);color:var(--success);border:1px solid rgba(16,185,129,0.3)"><i class="fas fa-check-circle"></i> Quiz Passed</span>
+        <?php else: ?>
+          <a href="quiz.php?course=<?=$courseId?>&lesson=<?=$currentLesson['id']?>" class="btn btn-accent btn-sm"><i class="fas fa-question-circle"></i> Take Quiz</a>
+        <?php endif; ?>
+      <?php elseif(!in_array($currentLesson['id'],$completed)): ?>
       <a href="learn.php?course=<?=$courseId?>&lesson=<?=$currentLesson['id']?>&complete=1" class="btn btn-success btn-sm"><i class="fas fa-check"></i> Mark Complete</a>
       <?php else: ?>
       <span class="badge" style="background:rgba(16,185,129,0.15);color:var(--success);border:1px solid rgba(16,185,129,0.3)"><i class="fas fa-check-circle"></i> Completed</span>

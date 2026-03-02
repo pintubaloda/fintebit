@@ -176,6 +176,36 @@ function ensureSchemaCompatibility($conn) {
         completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY unique_progress (user_id, lesson_id, course_id)
     )");
+    $conn->query("CREATE TABLE IF NOT EXISTS quizzes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        course_id INT NOT NULL,
+        lesson_id INT NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        pass_percentage INT DEFAULT 60,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_lesson_quiz (lesson_id)
+    )");
+    $conn->query("CREATE TABLE IF NOT EXISTS quiz_questions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        quiz_id INT NOT NULL,
+        question_text TEXT NOT NULL,
+        option_a VARCHAR(255) NOT NULL,
+        option_b VARCHAR(255) NOT NULL,
+        option_c VARCHAR(255) NOT NULL,
+        option_d VARCHAR(255) NOT NULL,
+        correct_option CHAR(1) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )");
+    $conn->query("CREATE TABLE IF NOT EXISTS quiz_attempts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        quiz_id INT NOT NULL,
+        score INT NOT NULL,
+        total_questions INT NOT NULL,
+        percentage DECIMAL(5,2) NOT NULL,
+        passed TINYINT(1) DEFAULT 0,
+        attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )");
 
     if ($conn->query("SHOW TABLES LIKE 'lessons'")->num_rows) {
         $lessonColumns = [];
@@ -185,6 +215,121 @@ function ensureSchemaCompatibility($conn) {
         }
         if (!isset($lessonColumns['is_preview'])) {
             $conn->query("ALTER TABLE lessons ADD COLUMN is_preview TINYINT(1) DEFAULT 0");
+        }
+
+        seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns);
+    }
+}
+
+function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
+    $courses = $conn->query("SELECT id, title FROM courses");
+    if (!$courses) {
+        return;
+    }
+
+    $countStmt = $conn->prepare("SELECT COUNT(*) as c FROM lessons WHERE course_id=?");
+    $insertLesson = $conn->prepare("INSERT INTO lessons (course_id, title, content, duration, order_num, is_preview) VALUES (?, ?, ?, ?, ?, ?)");
+    $updateCounts = $conn->prepare("UPDATE courses SET total_lessons=?, lessons=? WHERE id=?");
+    $updateOnlyTotal = $conn->prepare("UPDATE courses SET total_lessons=? WHERE id=?");
+    $updateOnlyLegacy = $conn->prepare("UPDATE courses SET lessons=? WHERE id=?");
+
+    $templates = [
+        ['Getting Started', 'Understand the fundamentals and workflow for this course.'],
+        ['Core Concepts', 'Learn the essential concepts you must know before practice.'],
+        ['Hands-on Practice', 'Apply concepts with practical examples and mini tasks.'],
+        ['Real-world Implementation', 'Use this lesson to connect theory with real projects.'],
+        ['Summary and Next Steps', 'Review key takeaways and plan your next improvements.'],
+    ];
+
+    while ($course = $courses->fetch_assoc()) {
+        $courseId = (int)$course['id'];
+        $courseTitle = $course['title'];
+
+        $countStmt->bind_param("i", $courseId);
+        $countStmt->execute();
+        $existing = (int)$countStmt->get_result()->fetch_assoc()['c'];
+
+        if ($existing === 0) {
+            $order = 1;
+            foreach ($templates as $template) {
+                $title = $template[0] . ': ' . $courseTitle;
+                $content = $template[1] . ' In "' . $courseTitle . '", focus on consistent learning and implementation.';
+                $duration = (string)(10 + $order * 5) . ' min';
+                $preview = $order === 1 ? 1 : 0;
+                $insertLesson->bind_param("isssii", $courseId, $title, $content, $duration, $order, $preview);
+                $insertLesson->execute();
+                $order++;
+            }
+            $lessonCount = count($templates);
+            if (isset($courseColumns['total_lessons']) && isset($courseColumns['lessons'])) {
+                $updateCounts->bind_param("iii", $lessonCount, $lessonCount, $courseId);
+                $updateCounts->execute();
+            } elseif (isset($courseColumns['total_lessons'])) {
+                $updateOnlyTotal->bind_param("ii", $lessonCount, $courseId);
+                $updateOnlyTotal->execute();
+            } elseif (isset($courseColumns['lessons'])) {
+                $updateOnlyLegacy->bind_param("ii", $lessonCount, $courseId);
+                $updateOnlyLegacy->execute();
+            }
+        }
+    }
+
+    $missingQuizzes = $conn->query("SELECT l.id as lesson_id, l.course_id, l.title as lesson_title, c.title as course_title
+                                    FROM lessons l
+                                    JOIN courses c ON c.id=l.course_id
+                                    LEFT JOIN quizzes q ON q.lesson_id=l.id
+                                    WHERE q.id IS NULL");
+    if (!$missingQuizzes) {
+        return;
+    }
+
+    $insertQuiz = $conn->prepare("INSERT INTO quizzes (course_id, lesson_id, title, pass_percentage) VALUES (?, ?, ?, 60)");
+    $insertQuestion = $conn->prepare("INSERT INTO quiz_questions (quiz_id, question_text, option_a, option_b, option_c, option_d, correct_option) VALUES (?, ?, ?, ?, ?, ?, ?)");
+
+    while ($row = $missingQuizzes->fetch_assoc()) {
+        $courseId = (int)$row['course_id'];
+        $lessonId = (int)$row['lesson_id'];
+        $lessonTitle = $row['lesson_title'];
+        $courseTitle = $row['course_title'];
+        $quizTitle = 'Quiz: ' . $lessonTitle;
+
+        $insertQuiz->bind_param("iis", $courseId, $lessonId, $quizTitle);
+        $insertQuiz->execute();
+        $quizId = (int)$conn->insert_id;
+        if ($quizId <= 0) {
+            continue;
+        }
+
+        $questions = [
+            [
+                "What is the main objective of \"" . $lessonTitle . "\" in " . $courseTitle . "?",
+                "Understand and apply the key lesson concepts",
+                "Skip fundamentals and jump randomly",
+                "Only memorize definitions",
+                "Ignore practice activities",
+                "A",
+            ],
+            [
+                "Which approach gives the best learning result for this lesson?",
+                "Read once and avoid exercises",
+                "Practice examples and review mistakes",
+                "Only watch videos without action",
+                "Rely only on guesswork",
+                "B",
+            ],
+            [
+                "To complete this lesson effectively, you should:",
+                "Stop after the first concept",
+                "Avoid taking notes",
+                "Apply concepts in a small task or project",
+                "Skip all assessments",
+                "C",
+            ],
+        ];
+
+        foreach ($questions as $q) {
+            $insertQuestion->bind_param("issssss", $quizId, $q[0], $q[1], $q[2], $q[3], $q[4], $q[5]);
+            $insertQuestion->execute();
         }
     }
 }

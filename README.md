@@ -42,5 +42,7 @@ This repo includes:
 ## Notes
 
 - App config uses environment variables with local defaults.
+- Missing lessons are auto-seeded per course on runtime migration.
+- Lesson-level quizzes are available with pass/fail tracking and retry attempts.
 - `setup.php` seeding bind types were corrected for clean initialization.
 - `.gitignore` and `.env.example` are included for GitHub-safe commits.
