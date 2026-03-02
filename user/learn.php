@@ -67,6 +67,15 @@ if (!empty($allLessons)) {
     }
 }
 $currentQuiz = $currentLesson ? ($quizByLesson[(int)$currentLesson['id']] ?? null) : null;
+$currentIndex = 0;
+if ($currentLesson) {
+    foreach ($allLessons as $idx => $lessonRow) {
+        if ((int)$lessonRow['id'] === (int)$currentLesson['id']) {
+            $currentIndex = $idx + 1;
+            break;
+        }
+    }
+}
 $color = getCategoryColor($course['category']);
 ?>
 <?php include '../includes/header.php'; ?>
@@ -115,14 +124,10 @@ $color = getCategoryColor($course['category']);
   <!-- Main Content -->
   <div style="padding:2rem;max-width:860px;">
     <?php if($currentLesson): ?>
-    <!-- Video placeholder -->
-    <div style="background:linear-gradient(135deg,<?=$color?>15,rgba(0,0,0,0.5));border-radius:16px;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;margin-bottom:1.5rem;position:relative;overflow:hidden;border:1px solid var(--border);">
-      <div style="text-align:center;">
-        <div style="width:70px;height:70px;border-radius:50%;background:rgba(255,107,53,0.9);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;cursor:pointer;transition:transform 0.2s" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
-          <i class="fas fa-play" style="color:white;font-size:1.5rem;margin-left:4px"></i>
-        </div>
-        <div style="font-size:0.9rem;color:var(--text-muted)">Lesson Video</div>
-        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.3rem"><?=$currentLesson['duration']?></div>
+    <div style="background:linear-gradient(135deg,<?=$color?>15,rgba(0,0,0,0.5));border:1px solid var(--border);border-radius:14px;padding:1.1rem 1.2rem;margin-bottom:1rem;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:0.8rem;flex-wrap:wrap;">
+        <div style="font-size:0.8rem;color:var(--text-muted);">Lesson <?= $currentIndex ?> of <?= count($allLessons) ?></div>
+        <div style="font-size:0.78rem;color:var(--gold);"><i class="fas fa-clock"></i> <?= htmlspecialchars($currentLesson['duration'] ?: 'Self-paced') ?></div>
       </div>
     </div>
     
@@ -145,6 +150,11 @@ $color = getCategoryColor($course['category']);
     <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:1.5rem;margin-bottom:1.5rem;">
       <h3 style="font-size:1rem;font-weight:700;margin-bottom:0.8rem"><i class="fas fa-book-open" style="color:var(--accent)"></i> Lesson Content</h3>
       <p style="color:var(--text-muted);line-height:1.8;font-size:0.9rem"><?=nl2br(htmlspecialchars($currentLesson['content']))?></p>
+    </div>
+    <?php else: ?>
+    <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:1.5rem;margin-bottom:1.5rem;">
+      <h3 style="font-size:1rem;font-weight:700;margin-bottom:0.8rem"><i class="fas fa-book-open" style="color:var(--accent)"></i> Lesson Content</h3>
+      <p style="color:var(--text-muted);line-height:1.8;font-size:0.9rem">This lesson is currently text-first and self-paced. Read the objectives, complete the practice step, and take the quiz to mark this lesson complete.</p>
     </div>
     <?php endif; ?>
 
