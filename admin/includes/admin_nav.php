@@ -8,6 +8,7 @@
         ['Add Course','add_course.php','fas fa-plus'],
         ['Users','users.php','fas fa-users'],
         ['Orders','orders.php','fas fa-receipt'],
+        ['Contact Messages','contact-messages.php','fas fa-envelope'],
       ]; foreach($adminLinks as $l): 
         $active = basename($_SERVER['PHP_SELF'])==$l[1]?'active':'';
       ?>

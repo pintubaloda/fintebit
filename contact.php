@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $conn->prepare("INSERT INTO contact_messages (name, email, subject, message) VALUES (?, ?, ?, ?)");
         $stmt->bind_param('ssss', $name, $email, $subject, $message);
         if ($stmt->execute()) {
-            $success = 'Thank you. Your message has been submitted. Our team will contact you soon.';
+            $success = 'Thank you, ' . $name . '. Your message has been submitted successfully. Our team will contact you soon.';
             $name = $email = $subject = $message = '';
         } else {
             $errors[] = 'Unable to submit right now. Please try again.';

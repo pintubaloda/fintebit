@@ -88,6 +88,7 @@ $topCourses = $conn->query("SELECT * FROM courses ORDER BY students_count DESC L
     <a href="add_course.php" class="btn btn-accent"><i class="fas fa-plus"></i> Add Course</a>
     <a href="courses.php" class="btn btn-ghost"><i class="fas fa-graduation-cap"></i> Manage Courses</a>
     <a href="users.php" class="btn btn-ghost"><i class="fas fa-users"></i> Manage Users</a>
+    <a href="contact-messages.php" class="btn btn-ghost"><i class="fas fa-envelope"></i> Contact Messages</a>
     <a href="orders.php" class="btn btn-ghost"><i class="fas fa-receipt"></i> View Orders</a>
   </div>
 </div></div>
