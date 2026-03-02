@@ -238,7 +238,7 @@ function ensureSchemaCompatibility($conn) {
 }
 
 function runContentMigrationIfNeeded($conn, $courseColumns, $lessonColumns) {
-    $contentVersion = 'content_v6';
+    $contentVersion = 'content_v7';
     $meta = $conn->query("SELECT meta_value FROM app_meta WHERE meta_key='content_version' LIMIT 1");
     $current = ($meta && $meta->num_rows > 0) ? $meta->fetch_assoc()['meta_value'] : '';
 
@@ -333,17 +333,6 @@ function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
                 $updateLessonVideo->bind_param("si", $autoVideoUrl, $lessonId);
                 $updateLessonVideo->execute();
             }
-
-            // Keep a high-detail custom example for JavaScript ES6+ core lesson.
-            if (
-                stripos($courseTitle, 'JavaScript ES6+') !== false &&
-                stripos($lesson['title'], 'Core') !== false
-            ) {
-                $es6Content = getJavascriptEs6CoreLessonContent();
-                $updateLesson->bind_param("si", $es6Content, $lessonId);
-                $updateLesson->execute();
-                storeLessonPages($conn, $lessonId, buildPagesFromContent($es6Content));
-            }
         }
     }
 
@@ -401,54 +390,131 @@ function buildLessonPages($courseTitle, $lessonTitle, $orderNum, $focusLine) {
     $implementationSteps = getTrackImplementationSteps($track, $courseTitle, $lessonTitle);
     $pitfalls = getTrackPitfalls($track);
     $lab = getTrackLabTask($track, $courseTitle, $lessonTitle);
+    $context = getLessonCaseContext($courseTitle, $lessonTitle, $orderNum);
+    $c0 = $concepts[0] ?? ['title' => 'Core Principle', 'explain' => 'Understand primary objective.', 'example' => 'Implement baseline output.'];
+    $c1 = $concepts[1] ?? $c0;
+    $c2 = $concepts[2] ?? $c0;
+    $c3 = $concepts[3] ?? $c1;
+    $c4 = $concepts[4] ?? $c2;
 
-    $page1 = $overview . "\n\n";
-    $page1 .= "Learning Objectives:\n";
-    $page1 .= "1. Understand the purpose of this lesson in the full course journey.\n";
-    $page1 .= "2. Implement the primary concepts with correct structure.\n";
-    $page1 .= "3. Validate your output using a repeatable checklist.\n\n";
-    $page1 .= "Core Concepts:\n";
-    foreach (array_slice($concepts, 0, 2) as $idx => $block) {
-        $page1 .= ($idx + 1) . ") " . $block['title'] . "\n";
-        $page1 .= $block['explain'] . "\n";
-        $page1 .= "Implementation Example:\n" . $block['example'] . "\n\n";
-    }
+    $pages = [];
 
-    $page2 = "Implementation Workflow (Real Project Style)\n\n";
-    $page2 .= "Follow these steps for \"" . $lessonTitle . "\":\n";
-    foreach ($implementationSteps as $idx => $stepText) {
-        $page2 .= ($idx + 1) . ". " . $stepText . "\n";
-    }
-    $page2 .= "\nApplied Scenario:\n";
-    $page2 .= "Assume you are shipping a production feature in \"" . $courseTitle . "\".\n";
-    $page2 .= "Use this lesson workflow to deliver one measurable output (query, module, dashboard, component, model, or automation) and review it with real constraints (performance, readability, correctness, maintainability).\n\n";
-    $page2 .= "Advanced Notes:\n";
-    foreach (array_slice($concepts, 2, 2) as $block) {
-        $page2 .= "- " . $block['title'] . ": " . $block['explain'] . "\n";
-    }
-
-    $page3 = "Troubleshooting and Mastery\n\n";
-    $page3 .= "Common Mistakes and Fixes:\n";
-    foreach ($pitfalls as $p) {
-        $page3 .= "- " . $p . "\n";
-    }
-    $page3 .= "\nHands-on Lab Task:\n";
-    $page3 .= $lab . "\n\n";
-    $page3 .= "Expected Output:\n";
-    $page3 .= "- A working implementation for \"" . $lessonTitle . "\".\n";
-    $page3 .= "- A short verification note explaining why your output is correct.\n";
-    $page3 .= "- One optimization/refactor from your first attempt.\n\n";
-    $page3 .= "Quiz Readiness Checklist:\n";
-    $page3 .= "- You can explain each concept without looking at notes.\n";
-    $page3 .= "- You can reproduce the implementation steps quickly.\n";
-    $page3 .= "- You can identify and fix at least one likely error path.\n";
-    $page3 .= "- You are ready to pass the lesson quiz.\n";
-
-    return [
-        ['title' => 'Concept Foundations', 'content' => $page1],
-        ['title' => 'Guided Implementation', 'content' => $page2],
-        ['title' => 'Review and Readiness', 'content' => $page3],
+    $pages[] = [
+        'title' => 'Page 1 - Lesson Brief',
+        'content' =>
+            $overview . "\n\n" .
+            "Delivery Context:\n" .
+            "- Product: " . $context['product'] . "\n" .
+            "- Team Persona: " . $context['persona'] . "\n" .
+            "- Data/Domain Focus: " . $context['domain'] . "\n" .
+            "- Primary KPI: " . $context['kpi'] . "\n\n" .
+            "Outcome of this lesson:\n" .
+            "Ship one reliable implementation of \"" . $lessonTitle . "\" that can be defended in review."
     ];
+
+    $pages[] = [
+        'title' => 'Page 2 - Concept A Deep Dive',
+        'content' =>
+            "Concept Focus: " . $c0['title'] . "\n\n" .
+            $c0['explain'] . "\n\n" .
+            "Implementation Example:\n" . $c0['example'] . "\n\n" .
+            "Applied Rule:\n" .
+            "Use this concept first when baseline behavior or structure is still unclear."
+    ];
+
+    $pages[] = [
+        'title' => 'Page 3 - Concept B Deep Dive',
+        'content' =>
+            "Concept Focus: " . $c1['title'] . "\n\n" .
+            $c1['explain'] . "\n\n" .
+            "Implementation Example:\n" . $c1['example'] . "\n\n" .
+            "Validation Prompt:\n" .
+            "What fails if this concept is skipped in " . $context['product'] . "?"
+    ];
+
+    $pages[] = [
+        'title' => 'Page 4 - Architecture Mapping',
+        'content' =>
+            "Architecture Mapping for \"" . $lessonTitle . "\":\n" .
+            "1. Input source: " . $context['input'] . "\n" .
+            "2. Processing layer: " . $context['processing'] . "\n" .
+            "3. Output target: " . $context['output'] . "\n\n" .
+            "Design Constraint:\n" . $context['constraint'] . "\n\n" .
+            "Concept tie-in:\n- " . $c2['title'] . "\n- " . $c3['title']
+    ];
+
+    $workflowText = "Implementation Workflow:\n";
+    foreach ($implementationSteps as $i => $stepText) {
+        $workflowText .= ($i + 1) . ". " . $stepText . "\n";
+    }
+    $pages[] = [
+        'title' => 'Page 5 - Step-by-Step Build',
+        'content' =>
+            $workflowText . "\n" .
+            "Execution Note:\n" .
+            "Capture evidence after each step (query output, screenshot, log, or test result)."
+    ];
+
+    $pages[] = [
+        'title' => 'Page 6 - Real Scenario Walkthrough',
+        'content' =>
+            "Scenario:\n" .
+            contextScenarioText($context, $courseTitle, $lessonTitle) . "\n\n" .
+            "Decision Points:\n" .
+            "- Which concept controls correctness?\n" .
+            "- Which concept controls performance?\n" .
+            "- Which concept improves maintainability?"
+    ];
+
+    $pitfallText = "Common Pitfalls:\n";
+    foreach ($pitfalls as $p) {
+        $pitfallText .= "- " . $p . "\n";
+    }
+    $pages[] = [
+        'title' => 'Page 7 - Debugging and Pitfalls',
+        'content' =>
+            $pitfallText . "\n" .
+            "Debug Procedure:\n" .
+            "1. Reproduce issue with minimal input.\n" .
+            "2. Isolate failing step.\n" .
+            "3. Apply targeted fix and re-verify full flow."
+    ];
+
+    $pages[] = [
+        'title' => 'Page 8 - Optimization Pass',
+        'content' =>
+            "Optimization Goals:\n" .
+            "- Improve response time / execution cost for " . $context['kpi'] . "\n" .
+            "- Reduce complexity in implementation logic\n" .
+            "- Improve readability for handover\n\n" .
+            "Optimization Candidate:\n" . $c4['title'] . "\n" .
+            $c4['explain'] . "\n\n" .
+            "Refactor Check:\n" .
+            "Confirm behavior unchanged after optimization."
+    ];
+
+    $pages[] = [
+        'title' => 'Page 9 - Hands-on Lab',
+        'content' =>
+            "Lab Task:\n" . $lab . "\n\n" .
+            "Lab Acceptance Criteria:\n" .
+            "- Output is correct for at least 3 representative cases.\n" .
+            "- One edge case handled explicitly.\n" .
+            "- Implementation notes recorded for future reuse."
+    ];
+
+    $pages[] = [
+        'title' => 'Page 10 - Assessment Readiness',
+        'content' =>
+            "Readiness Checklist for \"" . $lessonTitle . "\":\n" .
+            "- I can explain " . $c0['title'] . " and " . $c1['title'] . " in my own words.\n" .
+            "- I can execute the full workflow without external hints.\n" .
+            "- I can debug one likely failure path quickly.\n" .
+            "- I can justify one optimization decision.\n\n" .
+            "Next Action:\nTake the lesson quiz and score above pass threshold."
+    ];
+
+    return $pages;
 }
 
 function buildLessonOverview($courseTitle, $lessonTitle, $stage, $orderNum) {
@@ -576,6 +642,50 @@ function getTrackLabTask($track, $courseTitle, $lessonTitle) {
         default:
             return "Implement one real example from \"" . $lessonTitle . "\", validate output, and write a short improvement note.";
     }
+}
+
+function getLessonCaseContext($courseTitle, $lessonTitle, $orderNum) {
+    $seed = abs(crc32(strtolower($courseTitle . '|' . $lessonTitle . '|' . (int)$orderNum)));
+    $products = ['Subscription Billing Suite', 'Multi-tenant Admin Portal', 'Analytics Dashboard', 'Learning Platform', 'Ops Monitoring Console', 'Customer CRM Workspace'];
+    $personas = ['Full-stack Engineer', 'Backend Developer', 'Data Analyst', 'Frontend Engineer', 'Product Engineer', 'Platform Architect'];
+    $domains = ['user activity events', 'transaction records', 'course progress metrics', 'inventory flows', 'support ticket trends', 'payment lifecycle data'];
+    $kpis = ['response time', 'accuracy', 'completion rate', 'error rate', 'throughput', 'maintainability score'];
+    $inputs = ['API payload stream', 'database snapshot', 'form submission batch', 'event queue', 'CSV import feed', 'scheduled ETL result'];
+    $processing = ['validation + transformation layer', 'business rules engine', 'aggregation pipeline', 'state synchronization module', 'query execution plan', 'feature computation step'];
+    $outputs = ['dashboard widgets', 'REST response object', 'report export', 'persisted records', 'alert events', 'user-visible UI state'];
+    $constraints = [
+        'Must remain backward compatible with existing clients.',
+        'Must handle malformed input without service interruption.',
+        'Must keep query/runtime cost within production limits.',
+        'Must be easy for another engineer to extend next sprint.',
+        'Must preserve data consistency across retries.',
+        'Must pass review with clear logging and test evidence.'
+    ];
+
+    $pick = function($arr, $offset) use ($seed) {
+        $idx = ($seed + $offset) % count($arr);
+        return $arr[$idx];
+    };
+
+    return [
+        'product' => $pick($products, 3),
+        'persona' => $pick($personas, 7),
+        'domain' => $pick($domains, 11),
+        'kpi' => $pick($kpis, 17),
+        'input' => $pick($inputs, 23),
+        'processing' => $pick($processing, 29),
+        'output' => $pick($outputs, 31),
+        'constraint' => $pick($constraints, 37),
+    ];
+}
+
+function contextScenarioText($context, $courseTitle, $lessonTitle) {
+    return
+        "You are the " . $context['persona'] . " for " . $context['product'] . ". " .
+        "A delivery request requires implementing \"" . $lessonTitle . "\" in the " . $courseTitle . " track. " .
+        "Input arrives through " . $context['input'] . ", is handled by the " . $context['processing'] . ", " .
+        "and must produce reliable " . $context['output'] . ". " .
+        "Your success metric is " . $context['kpi'] . ".";
 }
 
 function buildYoutubeSearchUrl($courseTitle, $lessonTitle) {
