@@ -235,7 +235,7 @@ function ensureSchemaCompatibility($conn) {
 }
 
 function runContentMigrationIfNeeded($conn, $courseColumns, $lessonColumns) {
-    $contentVersion = 'content_v4';
+    $contentVersion = 'content_v5';
     $meta = $conn->query("SELECT meta_value FROM app_meta WHERE meta_key='content_version' LIMIT 1");
     $current = ($meta && $meta->num_rows > 0) ? $meta->fetch_assoc()['meta_value'] : '';
 
@@ -381,42 +381,186 @@ function generateLessonContent($courseTitle, $lessonTitle, $orderNum, $focusLine
 function buildLessonPages($courseTitle, $lessonTitle, $orderNum, $focusLine) {
     $concepts = getLessonSpecificConcepts($courseTitle, $lessonTitle, $orderNum, $focusLine);
     $stage = getLessonStageName($orderNum);
-    $intro = "Lesson: " . $lessonTitle . "\n\n";
-    $intro .= "Course: " . $courseTitle . "\n";
-    $intro .= "Stage: " . $stage . " (Module " . (int)$orderNum . ")\n\n";
-    $intro .= "This lesson is tailored to this module with concept-focused explanations and practical examples.\n\n";
+    $track = detectCourseTrack($courseTitle);
+    $overview = buildLessonOverview($courseTitle, $lessonTitle, $stage, $orderNum);
+    $implementationSteps = getTrackImplementationSteps($track, $courseTitle, $lessonTitle);
+    $pitfalls = getTrackPitfalls($track);
+    $lab = getTrackLabTask($track, $courseTitle, $lessonTitle);
 
-    $page1 = $intro;
-    $page2 = "";
-    $page3 = "";
-    foreach ($concepts as $idx => $block) {
-        $line = ($idx + 1) . ") " . $block['title'] . "\n";
-        $line .= $block['explain'] . "\n\n";
-        $line .= "Example:\n" . $block['example'] . "\n\n";
-        if ($idx < 2) {
-            $page1 .= $line;
-        } elseif ($idx < 4) {
-            $page2 .= $line;
-        } else {
-            $page3 .= $line;
-        }
+    $page1 = $overview . "\n\n";
+    $page1 .= "Learning Objectives:\n";
+    $page1 .= "1. Understand the purpose of this lesson in the full course journey.\n";
+    $page1 .= "2. Implement the primary concepts with correct structure.\n";
+    $page1 .= "3. Validate your output using a repeatable checklist.\n\n";
+    $page1 .= "Core Concepts:\n";
+    foreach (array_slice($concepts, 0, 2) as $idx => $block) {
+        $page1 .= ($idx + 1) . ") " . $block['title'] . "\n";
+        $page1 .= $block['explain'] . "\n";
+        $page1 .= "Implementation Example:\n" . $block['example'] . "\n\n";
     }
-    if ($page2 === '') {
-        $page2 = "Implementation Focus:\nApply page 1 ideas in a mini practical scenario for " . $courseTitle . ".";
+
+    $page2 = "Implementation Workflow (Real Project Style)\n\n";
+    $page2 .= "Follow these steps for \"" . $lessonTitle . "\":\n";
+    foreach ($implementationSteps as $idx => $stepText) {
+        $page2 .= ($idx + 1) . ". " . $stepText . "\n";
     }
-    if ($page3 === '') {
-        $page3 = "Consolidation:\nReview key learning outcomes from this lesson.";
+    $page2 .= "\nApplied Scenario:\n";
+    $page2 .= "Assume you are shipping a production feature in \"" . $courseTitle . "\".\n";
+    $page2 .= "Use this lesson workflow to deliver one measurable output (query, module, dashboard, component, model, or automation) and review it with real constraints (performance, readability, correctness, maintainability).\n\n";
+    $page2 .= "Advanced Notes:\n";
+    foreach (array_slice($concepts, 2, 2) as $block) {
+        $page2 .= "- " . $block['title'] . ": " . $block['explain'] . "\n";
     }
-    $page3 .= "\n\nPractice Checklist:\n";
-    $page3 .= "- Implement one example without copying.\n";
-    $page3 .= "- Explain why each concept is used.\n";
-    $page3 .= "- Complete the quiz to mark lesson completion.\n";
+
+    $page3 = "Troubleshooting and Mastery\n\n";
+    $page3 .= "Common Mistakes and Fixes:\n";
+    foreach ($pitfalls as $p) {
+        $page3 .= "- " . $p . "\n";
+    }
+    $page3 .= "\nHands-on Lab Task:\n";
+    $page3 .= $lab . "\n\n";
+    $page3 .= "Expected Output:\n";
+    $page3 .= "- A working implementation for \"" . $lessonTitle . "\".\n";
+    $page3 .= "- A short verification note explaining why your output is correct.\n";
+    $page3 .= "- One optimization/refactor from your first attempt.\n\n";
+    $page3 .= "Quiz Readiness Checklist:\n";
+    $page3 .= "- You can explain each concept without looking at notes.\n";
+    $page3 .= "- You can reproduce the implementation steps quickly.\n";
+    $page3 .= "- You can identify and fix at least one likely error path.\n";
+    $page3 .= "- You are ready to pass the lesson quiz.\n";
 
     return [
         ['title' => 'Concept Foundations', 'content' => $page1],
         ['title' => 'Guided Implementation', 'content' => $page2],
         ['title' => 'Review and Readiness', 'content' => $page3],
     ];
+}
+
+function buildLessonOverview($courseTitle, $lessonTitle, $stage, $orderNum) {
+    return
+        "Lesson: " . $lessonTitle . "\n" .
+        "Course: " . $courseTitle . "\n" .
+        "Stage: " . $stage . " (Module " . (int)$orderNum . ")\n\n" .
+        "Why this lesson matters:\n" .
+        "This module is designed to move you from concept familiarity to production-grade execution. " .
+        "By the end of this lesson, you should be able to apply the topic in a practical workflow and justify your implementation decisions.";
+}
+
+function detectCourseTrack($courseTitle) {
+    $title = strtolower($courseTitle);
+    if (strpos($title, 'excel') !== false || strpos($title, 'spreadsheet') !== false) return 'excel';
+    if (strpos($title, 'javascript') !== false || strpos($title, 'react') !== false || strpos($title, 'typescript') !== false || strpos($title, 'html') !== false || strpos($title, 'css') !== false || strpos($title, 'web') !== false) return 'frontend';
+    if (strpos($title, 'python') !== false || strpos($title, 'java') !== false || strpos($title, 'c++') !== false || strpos($title, 'node') !== false || strpos($title, 'php') !== false || strpos($title, 'programming') !== false) return 'programming';
+    if (strpos($title, 'database') !== false || strpos($title, 'sql') !== false || strpos($title, 'mysql') !== false) return 'database';
+    if (strpos($title, 'data science') !== false || strpos($title, 'machine learning') !== false || strpos($title, 'ai') !== false) return 'ml';
+    if (strpos($title, 'design') !== false || strpos($title, 'ux') !== false || strpos($title, 'ui') !== false) return 'design';
+    if (strpos($title, 'marketing') !== false) return 'marketing';
+    return 'general';
+}
+
+function getTrackImplementationSteps($track, $courseTitle, $lessonTitle) {
+    switch ($track) {
+        case 'frontend':
+            return [
+                "Define the UI/feature objective for \"" . $lessonTitle . "\" and list required states.",
+                "Build base structure/components and connect state/data flow.",
+                "Implement dynamic behavior (events, async calls, validation).",
+                "Handle edge cases: empty data, loading, failure, invalid input.",
+                "Refactor for readability and verify UX output against expected behavior.",
+            ];
+        case 'database':
+            return [
+                "Define schema entities and expected query output for this lesson.",
+                "Write initial query/model and validate with sample data.",
+                "Add joins/filters/grouping and verify accuracy.",
+                "Review index/plan for performance bottlenecks.",
+                "Finalize with transaction/error strategy for safe production use.",
+            ];
+        case 'ml':
+            return [
+                "Define target outcome and data assumptions.",
+                "Prepare/clean dataset and validate feature consistency.",
+                "Implement baseline pipeline/model for this lesson objective.",
+                "Evaluate with relevant metric and inspect failure cases.",
+                "Iterate feature/model choice and document improvements.",
+            ];
+        case 'excel':
+            return [
+                "Structure raw data into reliable table format.",
+                "Implement formulas/functions required by this lesson.",
+                "Add validation/rules to prevent data quality issues.",
+                "Create summary analysis (pivot/chart/KPI) tied to lesson output.",
+                "Review calculation accuracy with cross-check values.",
+            ];
+        case 'programming':
+            return [
+                "Break lesson requirement into function-level tasks.",
+                "Implement core logic with clean inputs/outputs.",
+                "Add guard/error handling for invalid scenarios.",
+                "Run sample tests and boundary checks.",
+                "Refactor for maintainability and performance.",
+            ];
+        default:
+            return [
+                "Clarify lesson objective and expected output.",
+                "Implement one working version quickly.",
+                "Validate behavior with 2-3 realistic test inputs.",
+                "Fix one weakness discovered during testing.",
+                "Document final approach and improvement notes.",
+            ];
+    }
+}
+
+function getTrackPitfalls($track) {
+    switch ($track) {
+        case 'frontend':
+            return [
+                "State mutation instead of immutable updates causes unpredictable rendering.",
+                "Missing error/loading states creates broken user journeys.",
+                "Overly large components reduce maintainability and testability.",
+            ];
+        case 'database':
+            return [
+                "Using joins without indexes can cause severe latency.",
+                "Incorrect grouping/filter order produces wrong aggregates.",
+                "Skipping transaction boundaries leads to inconsistent writes.",
+            ];
+        case 'ml':
+            return [
+                "Data leakage between train and validation inflates metrics.",
+                "Ignoring class imbalance can make accuracy misleading.",
+                "Overfitting from tuning without robust validation harms production behavior.",
+            ];
+        case 'excel':
+            return [
+                "Hardcoded cell references break when data grows.",
+                "Mixed data types (text/number/date) corrupt formulas.",
+                "No validation leads to silent reporting errors.",
+            ];
+        default:
+            return [
+                "Skipping requirement clarification leads to wrong implementation.",
+                "No edge-case checks creates hidden failures.",
+                "Not reviewing output against expected behavior reduces reliability.",
+            ];
+    }
+}
+
+function getTrackLabTask($track, $courseTitle, $lessonTitle) {
+    switch ($track) {
+        case 'frontend':
+            return "Build a mini feature for \"" . $lessonTitle . "\" with one API/async flow, one validation rule, and one user feedback state (success/error).";
+        case 'database':
+            return "Create and validate one query set for \"" . $lessonTitle . "\" including join, filter, and aggregate output. Add one index and compare query behavior.";
+        case 'ml':
+            return "Train a baseline model for \"" . $lessonTitle . "\", report one metric, and list one targeted improvement for the next iteration.";
+        case 'excel':
+            return "Create a workbook section implementing the lesson formulas and a summary view. Validate results with at least two manual checks.";
+        case 'programming':
+            return "Implement the lesson logic as reusable functions/classes and include at least three test cases (normal, boundary, invalid input).";
+        default:
+            return "Implement one real example from \"" . $lessonTitle . "\", validate output, and write a short improvement note.";
+    }
 }
 
 function buildPagesFromContent($content) {
