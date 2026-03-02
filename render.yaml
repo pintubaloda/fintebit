@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: fintebit
+    env: docker
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_USER
+        sync: false
+      - key: DB_PASS
+        sync: false
+      - key: DB_NAME
+        value: "fintebit"
+      - key: SITE_NAME
+        value: "Fintebit"
+      - key: SITE_URL
+        sync: false
