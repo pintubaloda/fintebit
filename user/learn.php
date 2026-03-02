@@ -65,7 +65,7 @@ $color = getCategoryColor($course['category']);
     <a href="learn.php?course=<?=$courseId?>&lesson=<?=$l['id']?>" class="lesson-item <?=$isActive?'active':''?>">
       <div style="width:26px;height:26px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:600;
         background:<?=$isDone?'var(--success)':($isActive?'var(--accent)':'rgba(255,255,255,0.08)')?>;
-        color:<?=($isDone||$isActive)?'white':'var(--text-muted)?>">
+        color:<?=($isDone||$isActive)?'white':'var(--text-muted)'?>">
         <?=$isDone?'<i class="fas fa-check"></i>':($i+1)?>
       </div>
       <div style="flex:1;min-width:0">
