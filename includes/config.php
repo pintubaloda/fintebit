@@ -238,7 +238,7 @@ function ensureSchemaCompatibility($conn) {
 }
 
 function runContentMigrationIfNeeded($conn, $courseColumns, $lessonColumns) {
-    $contentVersion = 'content_v7';
+    $contentVersion = 'content_v8';
     $meta = $conn->query("SELECT meta_value FROM app_meta WHERE meta_key='content_version' LIMIT 1");
     $current = ($meta && $meta->num_rows > 0) ? $meta->fetch_assoc()['meta_value'] : '';
 
@@ -391,6 +391,8 @@ function buildLessonPages($courseTitle, $lessonTitle, $orderNum, $focusLine) {
     $pitfalls = getTrackPitfalls($track);
     $lab = getTrackLabTask($track, $courseTitle, $lessonTitle);
     $context = getLessonCaseContext($courseTitle, $lessonTitle, $orderNum);
+    $bundle = getStageContentBundle($courseTitle, $lessonTitle, $orderNum, $track);
+    $variation = lessonVariationStamp($courseTitle, $lessonTitle, $orderNum);
     $c0 = $concepts[0] ?? ['title' => 'Core Principle', 'explain' => 'Understand primary objective.', 'example' => 'Implement baseline output.'];
     $c1 = $concepts[1] ?? $c0;
     $c2 = $concepts[2] ?? $c0;
@@ -409,7 +411,9 @@ function buildLessonPages($courseTitle, $lessonTitle, $orderNum, $focusLine) {
             "- Data/Domain Focus: " . $context['domain'] . "\n" .
             "- Primary KPI: " . $context['kpi'] . "\n\n" .
             "Outcome of this lesson:\n" .
-            "Ship one reliable implementation of \"" . $lessonTitle . "\" that can be defended in review."
+            "Ship one reliable implementation of \"" . $lessonTitle . "\" that can be defended in review.\n\n" .
+            "Module Focus:\n" . $bundle['focus'] . "\n\n" .
+            "Lesson Signature: " . $variation
     ];
 
     $pages[] = [
@@ -419,7 +423,8 @@ function buildLessonPages($courseTitle, $lessonTitle, $orderNum, $focusLine) {
             $c0['explain'] . "\n\n" .
             "Implementation Example:\n" . $c0['example'] . "\n\n" .
             "Applied Rule:\n" .
-            "Use this concept first when baseline behavior or structure is still unclear."
+            "Use this concept first when baseline behavior or structure is still unclear.\n\n" .
+            "Architecture Lens:\n" . $bundle['architecture']
     ];
 
     $pages[] = [
@@ -429,7 +434,8 @@ function buildLessonPages($courseTitle, $lessonTitle, $orderNum, $focusLine) {
             $c1['explain'] . "\n\n" .
             "Implementation Example:\n" . $c1['example'] . "\n\n" .
             "Validation Prompt:\n" .
-            "What fails if this concept is skipped in " . $context['product'] . "?"
+            "What fails if this concept is skipped in " . $context['product'] . "?\n\n" .
+            "Review Question:\n" . $bundle['review_q']
     ];
 
     $pages[] = [
@@ -441,6 +447,7 @@ function buildLessonPages($courseTitle, $lessonTitle, $orderNum, $focusLine) {
             "3. Output target: " . $context['output'] . "\n\n" .
             "Design Constraint:\n" . $context['constraint'] . "\n\n" .
             "Concept tie-in:\n- " . $c2['title'] . "\n- " . $c3['title']
+            . "\n\nInterface Contract:\n" . $bundle['contract']
     ];
 
     $workflowText = "Implementation Workflow:\n";
@@ -452,7 +459,8 @@ function buildLessonPages($courseTitle, $lessonTitle, $orderNum, $focusLine) {
         'content' =>
             $workflowText . "\n" .
             "Execution Note:\n" .
-            "Capture evidence after each step (query output, screenshot, log, or test result)."
+            "Capture evidence after each step (query output, screenshot, log, or test result).\n\n" .
+            "Done Definition:\n" . $bundle['done']
     ];
 
     $pages[] = [
@@ -463,7 +471,8 @@ function buildLessonPages($courseTitle, $lessonTitle, $orderNum, $focusLine) {
             "Decision Points:\n" .
             "- Which concept controls correctness?\n" .
             "- Which concept controls performance?\n" .
-            "- Which concept improves maintainability?"
+            "- Which concept improves maintainability?\n\n" .
+            "Escalation Trigger:\n" . $bundle['escalation']
     ];
 
     $pitfallText = "Common Pitfalls:\n";
@@ -477,7 +486,8 @@ function buildLessonPages($courseTitle, $lessonTitle, $orderNum, $focusLine) {
             "Debug Procedure:\n" .
             "1. Reproduce issue with minimal input.\n" .
             "2. Isolate failing step.\n" .
-            "3. Apply targeted fix and re-verify full flow."
+            "3. Apply targeted fix and re-verify full flow.\n\n" .
+            "Recovery Plan:\n" . $bundle['recovery']
     ];
 
     $pages[] = [
@@ -490,7 +500,8 @@ function buildLessonPages($courseTitle, $lessonTitle, $orderNum, $focusLine) {
             "Optimization Candidate:\n" . $c4['title'] . "\n" .
             $c4['explain'] . "\n\n" .
             "Refactor Check:\n" .
-            "Confirm behavior unchanged after optimization."
+            "Confirm behavior unchanged after optimization.\n\n" .
+            "Optimization Goal:\n" . $bundle['opt_goal']
     ];
 
     $pages[] = [
@@ -500,7 +511,8 @@ function buildLessonPages($courseTitle, $lessonTitle, $orderNum, $focusLine) {
             "Lab Acceptance Criteria:\n" .
             "- Output is correct for at least 3 representative cases.\n" .
             "- One edge case handled explicitly.\n" .
-            "- Implementation notes recorded for future reuse."
+            "- Implementation notes recorded for future reuse.\n\n" .
+            "Submission Artifact:\n" . $bundle['artifact']
     ];
 
     $pages[] = [
@@ -511,7 +523,8 @@ function buildLessonPages($courseTitle, $lessonTitle, $orderNum, $focusLine) {
             "- I can execute the full workflow without external hints.\n" .
             "- I can debug one likely failure path quickly.\n" .
             "- I can justify one optimization decision.\n\n" .
-            "Next Action:\nTake the lesson quiz and score above pass threshold."
+            "Next Action:\nTake the lesson quiz and score above pass threshold.\n\n" .
+            "Post-Quiz Reflection:\n" . $bundle['reflection']
     ];
 
     return $pages;
@@ -686,6 +699,70 @@ function contextScenarioText($context, $courseTitle, $lessonTitle) {
         "Input arrives through " . $context['input'] . ", is handled by the " . $context['processing'] . ", " .
         "and must produce reliable " . $context['output'] . ". " .
         "Your success metric is " . $context['kpi'] . ".";
+}
+
+function getStageContentBundle($courseTitle, $lessonTitle, $orderNum, $track) {
+    $order = max(1, (int)$orderNum);
+    $focus = [
+        1 => "Establish baseline clarity and correctness before scaling complexity.",
+        2 => "Build a repeatable workflow and remove ambiguity from implementation steps.",
+        3 => "Practice with realistic inputs and validate functional reliability.",
+        4 => "Integrate with surrounding modules and verify end-to-end behavior.",
+        5 => "Stress-test edge cases and build robust recovery paths.",
+        6 => "Consolidate capabilities and prepare for independent delivery.",
+    ];
+    $contract = [
+        1 => "Input and output fields must be explicit and type-safe.",
+        2 => "Intermediate state transitions must be observable and deterministic.",
+        3 => "Validation errors must be actionable for the operator.",
+        4 => "Integration boundary must not break existing contracts.",
+        5 => "Failure handling must be idempotent and auditable.",
+        6 => "Final output must satisfy measurable acceptance criteria.",
+    ];
+    $done = [
+        1 => "Core path executes successfully with one validated example.",
+        2 => "Workflow can be repeated by another engineer without clarification.",
+        3 => "At least three scenario tests pass (normal/boundary/invalid).",
+        4 => "Cross-module dependencies run without regression.",
+        5 => "Observed failures are reproducible and recoverable.",
+        6 => "Implementation is review-ready with concise documentation.",
+    ];
+    $reflection = [
+        1 => "What assumption did you correct while building the baseline?",
+        2 => "Which workflow step reduced most debugging time?",
+        3 => "Which validation rule prevented the most failures?",
+        4 => "Which integration point was hardest and why?",
+        5 => "Which failure mode changed your implementation strategy?",
+        6 => "What would you automate next from this lesson?",
+    ];
+
+    $trackDetails = [
+        'frontend' => ['architecture' => 'Component boundaries, state ownership, and render lifecycle.', 'review_q' => 'Is UI state normalized and predictable across rerenders?', 'escalation' => 'Escalate when user-facing errors impact critical journey completion.', 'recovery' => 'Fallback UI + retriable action + telemetry event.', 'opt_goal' => 'Reduce re-render cost while preserving UX consistency.', 'artifact' => 'Working UI flow + request/response logs + state diagram.'],
+        'database' => ['architecture' => 'Schema contracts, query plans, and transaction boundaries.', 'review_q' => 'Does query accuracy hold under skewed data distributions?', 'escalation' => 'Escalate when query latency or lock contention exceeds limits.', 'recovery' => 'Rollback strategy + compensating update path.', 'opt_goal' => 'Cut full scans and stabilize query response time.', 'artifact' => 'SQL script + EXPLAIN output + validation dataset.'],
+        'ml' => ['architecture' => 'Feature pipeline, model boundary, and evaluation loop.', 'review_q' => 'Are train/validation boundaries protected against leakage?', 'escalation' => 'Escalate when metric drift or class imbalance distorts outcomes.', 'recovery' => 'Fallback baseline model + controlled retraining cycle.', 'opt_goal' => 'Improve target metric without harming robustness.', 'artifact' => 'Notebook/script + metric report + error analysis.'],
+        'excel' => ['architecture' => 'Data table layout, formula dependencies, and summary views.', 'review_q' => 'Are formulas resilient to row/column growth?', 'escalation' => 'Escalate when source data quality breaks reporting trust.', 'recovery' => 'Validation constraints + reconciliation worksheet.', 'opt_goal' => 'Increase report reliability with minimal manual effort.', 'artifact' => 'Workbook section + validation checks + KPI summary.'],
+        'programming' => ['architecture' => 'Module responsibilities, interfaces, and test boundaries.', 'review_q' => 'Are side effects isolated and testable?', 'escalation' => 'Escalate when defects affect critical transaction paths.', 'recovery' => 'Guard clauses + structured error handling + tests.', 'opt_goal' => 'Simplify complexity while preserving correctness.', 'artifact' => 'Code patch + tests + short design note.'],
+        'general' => ['architecture' => 'Input-process-output flow with explicit checkpoints.', 'review_q' => 'Does each step have a clear validation signal?', 'escalation' => 'Escalate when failure reason cannot be isolated quickly.', 'recovery' => 'Checkpoint rollback + guided re-execution.', 'opt_goal' => 'Improve clarity and reliability of execution.', 'artifact' => 'Implementation note + output evidence + checklist.'],
+    ];
+
+    $t = $trackDetails[$track] ?? $trackDetails['general'];
+    return [
+        'focus' => $focus[$order] ?? $focus[6],
+        'architecture' => $t['architecture'],
+        'review_q' => $t['review_q'],
+        'contract' => $contract[$order] ?? $contract[6],
+        'done' => $done[$order] ?? $done[6],
+        'escalation' => $t['escalation'],
+        'recovery' => $t['recovery'],
+        'opt_goal' => $t['opt_goal'],
+        'artifact' => $t['artifact'],
+        'reflection' => $reflection[$order] ?? $reflection[6],
+    ];
+}
+
+function lessonVariationStamp($courseTitle, $lessonTitle, $orderNum) {
+    $hash = strtoupper(substr(sha1(strtolower($courseTitle . '|' . $lessonTitle . '|' . (int)$orderNum)), 0, 8));
+    return 'LSN-' . $hash;
 }
 
 function buildYoutubeSearchUrl($courseTitle, $lessonTitle) {
