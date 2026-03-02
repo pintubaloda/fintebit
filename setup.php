@@ -169,6 +169,9 @@ $tables = [
     course_id INT NOT NULL,
     amount DECIMAL(10,2) NOT NULL,
     payment_status ENUM('pending','completed','failed') DEFAULT 'completed',
+    utr_no VARCHAR(120) DEFAULT '',
+    screenshot_path VARCHAR(500) DEFAULT '',
+    verified_at TIMESTAMP NULL DEFAULT NULL,
     ordered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )",
 "CREATE TABLE IF NOT EXISTS lesson_progress (
@@ -269,6 +272,11 @@ foreach ($courses as $c) {
     $stmt->bind_param("ssssdissiisssdii", $c[0], $slug, $c[1], $c[2], $c[3], $c[4], $c[5], $c[6], $c[7], $c[7], $c[8], $c[9], $c[10], $c[11], $c[12], $c[12]);
     $stmt->execute();
 }
+
+// Pricing policy: all paid except JavaScript ES6+.
+$conn->query("UPDATE courses SET is_free=0");
+$conn->query("UPDATE courses SET price=CASE WHEN price<=0 THEN 999 ELSE price END WHERE title<>'JavaScript ES6+'");
+$conn->query("UPDATE courses SET is_free=1, price=0 WHERE title='JavaScript ES6+'");
 
 // Insert sample lessons for all courses
 $conn->query("DELETE FROM lessons");

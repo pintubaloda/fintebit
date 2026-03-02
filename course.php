@@ -12,6 +12,27 @@ if(!$course) { header("Location: courses.php"); exit; }
 $pageTitle = $course['title'];
 $lessons = $conn->query("SELECT * FROM lessons WHERE course_id={$course['id']} ORDER BY order_num");
 $enrolled = isLoggedIn() ? isEnrolled($conn, $_SESSION['user_id'], $course['id']) : false;
+$orderStatus = '';
+$latestOrder = null;
+if (isLoggedIn() && !$course['is_free']) {
+    $uid = (int)$_SESSION['user_id'];
+    $cid = (int)$course['id'];
+    $orderRes = $conn->query("SELECT * FROM orders WHERE user_id=$uid AND course_id=$cid ORDER BY id DESC LIMIT 1");
+    if ($orderRes && $orderRes->num_rows) {
+        $latestOrder = $orderRes->fetch_assoc();
+        $orderStatus = (string)$latestOrder['payment_status'];
+    }
+
+    // Auto-enroll if payment has been marked completed by admin.
+    if ($orderStatus === 'completed' && !$enrolled) {
+        $stmtEnroll = $conn->prepare("INSERT IGNORE INTO enrollments (user_id,course_id) VALUES(?,?)");
+        $stmtEnroll->bind_param("ii", $uid, $cid);
+        if ($stmtEnroll->execute()) {
+            $enrolled = true;
+            $conn->query("UPDATE courses SET students_count = students_count + 1 WHERE id=$cid");
+        }
+    }
+}
 
 // Handle enrollment
 $message = ''; $msgType = '';
@@ -24,16 +45,41 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['enroll'])) {
             if($stmt2->execute()) { $enrolled=true; $message='Successfully enrolled!'; $msgType='success'; 
                 $conn->query("UPDATE courses SET students_count=students_count+1 WHERE id={$course['id']}");}
         } else {
-            // Simulate payment for demo
-            $stmt2 = $conn->prepare("INSERT IGNORE INTO enrollments (user_id,course_id) VALUES(?,?)");
-            $stmt2->bind_param("ii", $_SESSION['user_id'], $course['id']);
-            if($stmt2->execute()) {
-                $conn->prepare("INSERT INTO orders(user_id,course_id,amount) VALUES(?,?,?)")->execute() || true;
-                $o=$conn->prepare("INSERT INTO orders(user_id,course_id,amount) VALUES(?,?,?)");
-                $o->bind_param("iid",$_SESSION['user_id'],$course['id'],$course['price']);
-                $o->execute();
-                $conn->query("UPDATE courses SET students_count=students_count+1 WHERE id={$course['id']}");
-                $enrolled=true; $message='Payment successful! You are now enrolled.'; $msgType='success';
+            $utrNo = trim($_POST['utr_no'] ?? '');
+            if ($utrNo === '' || strlen($utrNo) < 6) {
+                $message = 'Please enter a valid UTR number.';
+                $msgType = 'danger';
+            } elseif (!isset($_FILES['payment_screenshot']) || $_FILES['payment_screenshot']['error'] !== UPLOAD_ERR_OK) {
+                $message = 'Please upload payment screenshot.';
+                $msgType = 'danger';
+            } else {
+                $allowedExt = ['jpg','jpeg','png','webp','pdf'];
+                $fileName = $_FILES['payment_screenshot']['name'];
+                $tmpName = $_FILES['payment_screenshot']['tmp_name'];
+                $ext = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+                if (!in_array($ext, $allowedExt, true)) {
+                    $message = 'Invalid file type. Upload JPG, PNG, WEBP, or PDF.';
+                    $msgType = 'danger';
+                } else {
+                    $uploadDir = __DIR__ . '/uploads/payment_proofs';
+                    if (!is_dir($uploadDir)) {
+                        @mkdir($uploadDir, 0775, true);
+                    }
+                    $safeName = 'proof_' . (int)$_SESSION['user_id'] . '_' . (int)$course['id'] . '_' . time() . '.' . $ext;
+                    $dest = $uploadDir . '/' . $safeName;
+                    if (!move_uploaded_file($tmpName, $dest)) {
+                        $message = 'Failed to upload screenshot. Please try again.';
+                        $msgType = 'danger';
+                    } else {
+                        $pathForDb = 'uploads/payment_proofs/' . $safeName;
+                        $o=$conn->prepare("INSERT INTO orders(user_id,course_id,amount,payment_status,utr_no,screenshot_path) VALUES(?,?,?,'pending',?,?)");
+                        $o->bind_param("iidss",$_SESSION['user_id'],$course['id'],$course['price'],$utrNo,$pathForDb);
+                        $o->execute();
+                        $orderStatus = 'pending';
+                        $message='Payment submitted. Please wait, we will verify it soon.';
+                        $msgType='success';
+                    }
+                }
             }
         }
     }
@@ -87,12 +133,32 @@ $icon = getCategoryIcon($course['category']);
             <a href="user/learn.php?course=<?=$course['id']?>" class="btn btn-success w-full" style="justify-content:center;margin-bottom:0.8rem"><i class="fas fa-play-circle"></i> Continue Learning</a>
             <div style="text-align:center;font-size:0.8rem;color:var(--success)"><i class="fas fa-check-circle"></i> You're enrolled!</div>
           <?php elseif(isLoggedIn()): ?>
-            <form method="POST">
-              <button type="submit" name="enroll" class="btn btn-accent w-full btn-lg" style="justify-content:center">
-                <?=$course['is_free']?'<i class="fas fa-graduation-cap"></i> Enroll for Free':'<i class="fas fa-credit-card"></i> Buy Now — ₹'.number_format($course['price'])?>
-              </button>
-            </form>
-            <?php if(!$course['is_free']): ?><p style="text-align:center;font-size:0.75rem;color:var(--text-muted);margin-top:0.5rem">30-day money back guarantee</p><?php endif; ?>
+            <?php if($course['is_free']): ?>
+              <form method="POST">
+                <button type="submit" name="enroll" class="btn btn-accent w-full btn-lg" style="justify-content:center">
+                  <i class="fas fa-graduation-cap"></i> Enroll for Free
+                </button>
+              </form>
+            <?php else: ?>
+              <?php if($orderStatus === 'pending'): ?>
+                <div style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.35);padding:0.8rem;border-radius:10px;font-size:0.82rem;color:#fcd34d;margin-bottom:0.8rem;">
+                  <strong>Payment status: Pending</strong><br>
+                  Please wait, we will verify it soon. You cannot access this course until verification.
+                </div>
+              <?php elseif($orderStatus === 'failed'): ?>
+                <div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);padding:0.8rem;border-radius:10px;font-size:0.82rem;color:#fca5a5;margin-bottom:0.8rem;">
+                  Last payment was marked failed. Submit new payment proof.
+                </div>
+              <?php endif; ?>
+              <form method="POST" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:0.6rem;">
+                <input type="text" name="utr_no" placeholder="Enter UTR Number" required class="form-control" style="padding:0.7rem 0.8rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.85rem;">
+                <input type="file" name="payment_screenshot" accept=".jpg,.jpeg,.png,.webp,.pdf" required class="form-control" style="padding:0.55rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.8rem;">
+                <button type="submit" name="enroll" class="btn btn-accent w-full btn-lg" style="justify-content:center">
+                  <i class="fas fa-upload"></i> Submit Payment Proof — ₹<?=number_format($course['price'])?>
+                </button>
+              </form>
+              <p style="text-align:center;font-size:0.74rem;color:var(--text-muted);margin-top:0.55rem">After submission, status will be pending until admin verification.</p>
+            <?php endif; ?>
           <?php else: ?>
             <a href="login.php?redirect=course.php?slug=<?=$slug?>" class="btn btn-accent w-full btn-lg" style="justify-content:center"><i class="fas fa-sign-in-alt"></i> Login to Enroll</a>
             <a href="register.php" class="btn btn-ghost w-full mt-1" style="justify-content:center;margin-top:0.5rem">Create Free Account</a>

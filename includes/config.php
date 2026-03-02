@@ -214,6 +214,20 @@ function ensureSchemaCompatibility($conn) {
         page_content LONGTEXT NOT NULL,
         UNIQUE KEY uniq_lesson_page (lesson_id, page_no)
     )");
+    $orderCols = [];
+    $orderMeta = $conn->query("SHOW COLUMNS FROM orders");
+    while ($orderMeta && ($row = $orderMeta->fetch_assoc())) {
+        $orderCols[$row['Field']] = true;
+    }
+    if (!isset($orderCols['utr_no'])) {
+        $conn->query("ALTER TABLE orders ADD COLUMN utr_no VARCHAR(120) DEFAULT ''");
+    }
+    if (!isset($orderCols['screenshot_path'])) {
+        $conn->query("ALTER TABLE orders ADD COLUMN screenshot_path VARCHAR(500) DEFAULT ''");
+    }
+    if (!isset($orderCols['verified_at'])) {
+        $conn->query("ALTER TABLE orders ADD COLUMN verified_at TIMESTAMP NULL DEFAULT NULL");
+    }
 
     if ($conn->query("SHOW TABLES LIKE 'lessons'")->num_rows) {
         $lessonColumns = [];
@@ -233,8 +247,34 @@ function ensureSchemaCompatibility($conn) {
             meta_value TEXT,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )");
+        runCommercialPolicyMigrationIfNeeded($conn);
         runContentMigrationIfNeeded($conn, $courseColumns, $lessonColumns);
     }
+}
+
+function runCommercialPolicyMigrationIfNeeded($conn) {
+    $policyVersion = 'pricing_policy_v1';
+    $meta = $conn->query("SELECT meta_value FROM app_meta WHERE meta_key='commercial_policy_version' LIMIT 1");
+    $current = ($meta && $meta->num_rows > 0) ? $meta->fetch_assoc()['meta_value'] : '';
+    if ($current === $policyVersion) {
+        return;
+    }
+
+    // Reset enrollments/subscriptions and related progress as requested.
+    $conn->query("DELETE FROM lesson_progress");
+    $conn->query("DELETE FROM enrollments");
+    $conn->query("DELETE FROM quiz_attempts");
+    $conn->query("DELETE FROM orders");
+    $conn->query("UPDATE courses SET students_count=0");
+
+    // Commercial rule: all paid except JavaScript ES6+.
+    $conn->query("UPDATE courses SET is_free=0");
+    $conn->query("UPDATE courses SET price=CASE WHEN price<=0 THEN 999 ELSE price END WHERE title<>'JavaScript ES6+'");
+    $conn->query("UPDATE courses SET is_free=1, price=0 WHERE title='JavaScript ES6+'");
+
+    $stmt = $conn->prepare("INSERT INTO app_meta (meta_key, meta_value) VALUES ('commercial_policy_version', ?) ON DUPLICATE KEY UPDATE meta_value=VALUES(meta_value)");
+    $stmt->bind_param("s", $policyVersion);
+    $stmt->execute();
 }
 
 function runContentMigrationIfNeeded($conn, $courseColumns, $lessonColumns) {
