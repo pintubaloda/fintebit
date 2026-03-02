@@ -224,6 +224,9 @@ function ensureSchemaCompatibility($conn) {
         if (!isset($lessonColumns['is_preview'])) {
             $conn->query("ALTER TABLE lessons ADD COLUMN is_preview TINYINT(1) DEFAULT 0");
         }
+        if (!isset($lessonColumns['youtube_url'])) {
+            $conn->query("ALTER TABLE lessons ADD COLUMN youtube_url VARCHAR(500) DEFAULT ''");
+        }
 
         $conn->query("CREATE TABLE IF NOT EXISTS app_meta (
             meta_key VARCHAR(100) PRIMARY KEY,

@@ -112,6 +112,14 @@ $totalPages = max(1, count($lessonPages));
 if ($currentPageNo < 1) $currentPageNo = 1;
 if ($currentPageNo > $totalPages) $currentPageNo = $totalPages;
 $activePage = isset($lessonPages[$currentPageNo - 1]) ? $lessonPages[$currentPageNo - 1] : ['title' => 'Lesson Content', 'content' => (string)($currentLesson['content'] ?? '')];
+
+$youtubeUrl = trim((string)($currentLesson['youtube_url'] ?? ''));
+$youtubeEmbedUrl = '';
+if ($youtubeUrl !== '') {
+    if (preg_match('/(?:v=|youtu\\.be\\/|embed\\/)([A-Za-z0-9_-]{11})/', $youtubeUrl, $m)) {
+        $youtubeEmbedUrl = 'https://www.youtube.com/embed/' . $m[1];
+    }
+}
 ?>
 <?php include '../includes/header.php'; ?>
 <style>
@@ -174,6 +182,25 @@ $activePage = isset($lessonPages[$currentPageNo - 1]) ? $lessonPages[$currentPag
           <a href="learn.php?course=<?=$courseId?>&lesson=<?=$currentLesson['id']?>&page=<?=$p?>" class="btn <?=$p===$currentPageNo?'btn-accent':'btn-ghost'?> btn-sm"><?=$p?></a>
         <?php endfor; ?>
       </div>
+    </div>
+    <?php endif; ?>
+
+    <?php if($youtubeEmbedUrl !== ''): ?>
+    <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:1rem;margin-bottom:1rem;">
+      <h3 style="font-size:0.95rem;font-weight:700;margin-bottom:0.7rem"><i class="fab fa-youtube" style="color:#ff3b30"></i> Lesson Video</h3>
+      <div style="position:relative;padding-top:56.25%;border-radius:10px;overflow:hidden;background:#000;">
+        <iframe
+          src="<?= htmlspecialchars($youtubeEmbedUrl) ?>"
+          title="Lesson YouTube Video"
+          style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowfullscreen>
+        </iframe>
+      </div>
+    </div>
+    <?php else: ?>
+    <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:0.9rem 1rem;margin-bottom:1rem;font-size:0.82rem;color:var(--text-muted);">
+      No lesson video linked yet for this topic.
     </div>
     <?php endif; ?>
     

@@ -157,6 +157,7 @@ $tables = [
     course_id INT,
     title VARCHAR(200),
     content TEXT,
+    youtube_url VARCHAR(500) DEFAULT '',
     duration VARCHAR(20),
     order_num INT DEFAULT 0,
     is_preview TINYINT(1) DEFAULT 0,
