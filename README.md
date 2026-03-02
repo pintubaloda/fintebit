@@ -22,18 +22,18 @@ Default demo logins after setup:
 This repo includes:
 - `Dockerfile`
 - `railway.json`
-- `docker-entrypoint.sh` (binds Apache to Railway `PORT`)
+- `docker-entrypoint.sh` (binds PHP server to Railway `PORT`)
 
 ### Steps
 
 1. In Railway, create a new project from your GitHub repo.
 2. Add a **MySQL** service/plugin inside the same Railway project.
 3. In your app service, set these environment variables:
-   - `DB_HOST` = MySQL host from Railway
-   - `DB_PORT` = `3306`
-   - `DB_USER` = MySQL user from Railway
-   - `DB_PASS` = MySQL password from Railway
-   - `DB_NAME` = `fintebit`
+   - `DB_HOST` = `${{MySQL.MYSQLHOST}}`
+   - `DB_PORT` = `${{MySQL.MYSQLPORT}}`
+   - `DB_USER` = `${{MySQL.MYSQLUSER}}`
+   - `DB_PASS` = `${{MySQL.MYSQLPASSWORD}}`
+   - `DB_NAME` = `${{MySQL.MYSQLDATABASE}}`
    - `SITE_NAME` = `Fintebit`
    - `SITE_URL` = your Railway public URL
 4. Deploy the app service.

@@ -1,18 +1,20 @@
 <?php
+mysqli_report(MYSQLI_REPORT_OFF);
+
 if (!defined('DB_HOST')) {
-    define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+    define('DB_HOST', getenv('DB_HOST') ?: (getenv('MYSQLHOST') ?: 'localhost'));
 }
 if (!defined('DB_PORT')) {
-    define('DB_PORT', (int)(getenv('DB_PORT') ?: 3306));
+    define('DB_PORT', (int)(getenv('DB_PORT') ?: (getenv('MYSQLPORT') ?: 3306)));
 }
 if (!defined('DB_USER')) {
-    define('DB_USER', getenv('DB_USER') ?: 'root');
+    define('DB_USER', getenv('DB_USER') ?: (getenv('MYSQLUSER') ?: 'root'));
 }
 if (!defined('DB_PASS')) {
-    define('DB_PASS', getenv('DB_PASS') ?: '');
+    define('DB_PASS', getenv('DB_PASS') ?: (getenv('MYSQLPASSWORD') ?: ''));
 }
 if (!defined('DB_NAME')) {
-    define('DB_NAME', getenv('DB_NAME') ?: 'fintebit');
+    define('DB_NAME', getenv('DB_NAME') ?: (getenv('MYSQLDATABASE') ?: 'fintebit'));
 }
 if (!defined('SITE_URL')) {
     $siteUrl = getenv('SITE_URL');
