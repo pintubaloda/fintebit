@@ -278,7 +278,7 @@ function runCommercialPolicyMigrationIfNeeded($conn) {
 }
 
 function runContentMigrationIfNeeded($conn, $courseColumns, $lessonColumns) {
-    $contentVersion = 'content_v10';
+    $contentVersion = 'content_v11';
     $meta = $conn->query("SELECT meta_value FROM app_meta WHERE meta_key='content_version' LIMIT 1");
     $current = ($meta && $meta->num_rows > 0) ? $meta->fetch_assoc()['meta_value'] : '';
 
@@ -288,6 +288,7 @@ function runContentMigrationIfNeeded($conn, $courseColumns, $lessonColumns) {
 
     seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns);
     applyCustomJavascriptLesson2ContentAndQuiz($conn);
+    applyCustomJavascriptLessons3To6ContentAndQuiz($conn);
     $stmt = $conn->prepare("INSERT INTO app_meta (meta_key, meta_value) VALUES ('content_version', ?) ON DUPLICATE KEY UPDATE meta_value=VALUES(meta_value)");
     $stmt->bind_param("s", $contentVersion);
     $stmt->execute();
@@ -1002,6 +1003,510 @@ PAGE;
     foreach ($questions as $q) {
         $insertQuestion->bind_param("issssss", $quizId, $q[0], $q[1], $q[2], $q[3], $q[4], $q[5]);
         $insertQuestion->execute();
+    }
+}
+
+function applyCustomJavascriptLessons3To6ContentAndQuiz($conn) {
+    $courseRes = $conn->query("SELECT id FROM courses WHERE title='JavaScript ES6+' LIMIT 1");
+    if (!$courseRes || $courseRes->num_rows === 0) {
+        return;
+    }
+    $courseId = (int)$courseRes->fetch_assoc()['id'];
+
+    $lessonData = [
+        3 => [
+            'fallback_title' => 'Template Literals, Destructuring & Default Parameters',
+            'pages' => [
+                [
+                    'title' => 'Template Literals In Depth',
+                    'content' => <<<'PAGE'
+LESSON 3: Template Literals, Destructuring & Default Parameters (In Depth)
+
+Objectives
+- Master template literals
+- Deep understanding of destructuring
+- Apply default parameters correctly
+- Avoid common mistakes
+
+1) Template Literals (Deep Usage)
+String Interpolation:
+const name = "Rakesh";
+const age = 30;
+console.log(`My name is ${name} and I am ${age}`);
+
+Expression Evaluation:
+console.log(`2 + 2 = ${2 + 2}`);
+
+Multi-line String:
+const msg = `
+Line 1
+Line 2
+Line 3
+`;
+
+Use template literals whenever dynamic string values are needed.
+PAGE
+                ],
+                [
+                    'title' => 'Destructuring Advanced Patterns',
+                    'content' => <<<'PAGE'
+2) Destructuring (Advanced)
+Object Destructuring:
+const user = { name: "Rakesh", age: 30, city: "Pune" };
+const { name, age } = user;
+
+Renaming Variables:
+const { name: fullName } = user;
+
+Default Values:
+const { country = "India" } = user;
+
+Nested Destructuring:
+const data = {
+   user: {
+      profile: {
+         email: "test@gmail.com"
+      }
+   }
+};
+const { user: { profile: { email } } } = data;
+
+Array Destructuring:
+const numbers = [10, 20, 30];
+const [a, b] = numbers;
+const [first, , third] = numbers; // skip values
+PAGE
+                ],
+                [
+                    'title' => 'Default Parameters and Edge Cases',
+                    'content' => <<<'PAGE'
+3) Default Parameters
+function greet(name = "Guest"){
+   return `Hello ${name}`;
+}
+
+Important behavior:
+greet(undefined); // uses default
+greet(null); // null (default NOT applied)
+
+Practice checks:
+- Use defaults for optional input.
+- Validate null explicitly when business rules require it.
+- Keep default values simple and predictable.
+PAGE
+                ],
+            ],
+            'questions' => [
+                [
+                    "What happens if a destructured property does not exist and no default is provided?",
+                    "JavaScript throws SyntaxError",
+                    "It becomes undefined",
+                    "It becomes null automatically",
+                    "It becomes empty string",
+                    "B",
+                ],
+                [
+                    "Output:\nconst [a,,c] = [1,2,3];\nconsole.log(c);",
+                    "1",
+                    "2",
+                    "3",
+                    "undefined",
+                    "C",
+                ],
+                [
+                    "Which call uses default parameter value in function greet(name = 'Guest')?",
+                    "greet(null)",
+                    "greet(false)",
+                    "greet(undefined)",
+                    "greet('')",
+                    "C",
+                ],
+                [
+                    "Which syntax correctly renames a destructured object property?",
+                    "const { name = fullName } = user;",
+                    "const { name: fullName } = user;",
+                    "const { fullName: name } = user;",
+                    "const { rename(name, fullName) } = user;",
+                    "B",
+                ],
+                [
+                    "Write cube with default parameter n=2. Which is correct?",
+                    "const cube = (n) => n*n*n = 2;",
+                    "function cube(n=2){ return n ** 3; }",
+                    "function cube(n){ default 2; return n*n*n; }",
+                    "const cube = n=2 => n*n*n;",
+                    "B",
+                ],
+            ],
+        ],
+        4 => [
+            'fallback_title' => 'Spread, Rest & Enhanced Objects',
+            'pages' => [
+                [
+                    'title' => 'Spread Operator',
+                    'content' => <<<'PAGE'
+LESSON 4: Spread, Rest & Enhanced Objects
+
+Objectives
+- Master spread operator
+- Master rest parameters
+- Understand shallow copy
+- Use enhanced object literals
+
+1) Spread Operator (...)
+Copy Array:
+const arr1 = [1,2];
+const arr2 = [...arr1];
+
+Merge Arrays:
+const merged = [...arr1, 3,4];
+
+Copy Object:
+const user = {name:"Rakesh"};
+const newUser = {...user, age:30};
+
+Important: spread creates shallow copy only.
+PAGE
+                ],
+                [
+                    'title' => 'Rest Parameters',
+                    'content' => <<<'PAGE'
+2) Rest Parameters
+function sum(...numbers){
+   return numbers.reduce((total, n) => total + n, 0);
+}
+
+Difference:
+- Spread expands values.
+- Rest collects values.
+
+Rest is ideal for variable argument utility functions.
+PAGE
+                ],
+                [
+                    'title' => 'Enhanced Object Literals',
+                    'content' => <<<'PAGE'
+3) Enhanced Object Literals
+const name = "Rakesh";
+
+const user = {
+   name,
+   greet(){
+      console.log("Hello");
+   }
+};
+
+Benefits:
+- Shorter syntax
+- Cleaner method declarations
+- Better readability in modern JavaScript codebases
+PAGE
+                ],
+            ],
+            'questions' => [
+                [
+                    "What is the key difference between spread and rest operator?",
+                    "Spread collects and rest expands",
+                    "Spread expands and rest collects",
+                    "Both only work with arrays",
+                    "Both create deep copy",
+                    "B",
+                ],
+                [
+                    "What type of copy does spread create for objects?",
+                    "Deep copy",
+                    "Encrypted copy",
+                    "Shallow copy",
+                    "No copy, just reference",
+                    "C",
+                ],
+                [
+                    "Which function correctly uses rest to find max value?",
+                    "function max(...nums){ return Math.max(...nums); }",
+                    "function max(nums...){ return nums.max(); }",
+                    "const max = (...nums) => nums;",
+                    "function max(...nums){ return nums.reduce(); }",
+                    "A",
+                ],
+                [
+                    "Which is an enhanced object literal method syntax?",
+                    "greet: function(){ }",
+                    "function greet(){ }",
+                    "greet(){ }",
+                    "method greet => { }",
+                    "C",
+                ],
+                [
+                    "Result of const merged = [...[1,2], 3, 4] ?",
+                    "[1,2,[3,4]]",
+                    "[1,2,3,4]",
+                    "[[1,2],3,4]",
+                    "Error",
+                    "B",
+                ],
+            ],
+        ],
+        5 => [
+            'fallback_title' => 'Classes & Modules',
+            'pages' => [
+                [
+                    'title' => 'Classes and Constructors',
+                    'content' => <<<'PAGE'
+LESSON 5: Classes & Modules
+
+Objectives
+- Understand ES6 OOP
+- Use constructor
+- Inheritance
+- Import/Export system
+
+1) Classes
+class Person{
+   constructor(name){
+      this.name = name;
+   }
+
+   greet(){
+      return `Hello ${this.name}`;
+   }
+}
+
+Use class syntax to model reusable entities cleanly.
+PAGE
+                ],
+                [
+                    'title' => 'Inheritance with super()',
+                    'content' => <<<'PAGE'
+Inheritance:
+class Employee extends Person{
+   constructor(name, role){
+      super(name);
+      this.role = role;
+   }
+}
+
+super() calls parent constructor and initializes inherited state.
+Without super() in a child constructor, JavaScript throws an error.
+PAGE
+                ],
+                [
+                    'title' => 'Modules: Named and Default Exports',
+                    'content' => <<<'PAGE'
+2) Modules
+Named Export:
+export const add = (a,b) => a+b;
+
+Import named:
+import { add } from './math.js';
+
+Default Export:
+export default function greet(){}
+
+Difference:
+- Named export: import by exact exported name.
+- Default export: import with any local name.
+PAGE
+                ],
+            ],
+            'questions' => [
+                [
+                    "What does super() do in a child class constructor?",
+                    "Calls a static method",
+                    "Calls parent constructor",
+                    "Creates a new prototype",
+                    "Exports the class",
+                    "B",
+                ],
+                [
+                    "Difference between default and named export?",
+                    "No difference",
+                    "Default export must be imported in braces",
+                    "Named export can be imported with any name without alias",
+                    "Default export imports without braces; named usually uses braces",
+                    "D",
+                ],
+                [
+                    "Which class declaration is valid?",
+                    "class Car() { start(){ return 'on'; } }",
+                    "class Car { constructor(){} start(){ return 'on'; } }",
+                    "class Car extends { start(){} }",
+                    "class Car = { start(){} }",
+                    "B",
+                ],
+                [
+                    "Which is valid named import?",
+                    "import add from './math.js';",
+                    "import { add } from './math.js';",
+                    "import * add from './math.js';",
+                    "require { add } from './math.js';",
+                    "B",
+                ],
+                [
+                    "Create class Car with method start(). Choose correct option.",
+                    "class Car { start(){ return 'Started'; } }",
+                    "class Car(start){ return 'Started'; }",
+                    "class Car => { start(){ return 'Started'; } }",
+                    "const Car = class start(){ return 'Started'; }",
+                    "A",
+                ],
+            ],
+        ],
+        6 => [
+            'fallback_title' => 'Promises & Async JavaScript',
+            'pages' => [
+                [
+                    'title' => 'Promise Basics and States',
+                    'content' => <<<'PAGE'
+LESSON 6: Promises & Async JavaScript
+
+Objectives
+- Understand Promise lifecycle
+- Chaining
+- Async/Await
+- Error handling
+
+1) Promise Basics
+States:
+- Pending
+- Fulfilled
+- Rejected
+
+const promise = new Promise((resolve,reject)=>{
+   resolve("Success");
+});
+PAGE
+                ],
+                [
+                    'title' => 'Promise Chaining',
+                    'content' => <<<'PAGE'
+2) Promise Chaining
+fetch(url)
+  .then(res => res.json())
+  .then(data => console.log(data))
+  .catch(err => console.log(err));
+
+Use chaining to process sequential async steps and a single catch for failures.
+PAGE
+                ],
+                [
+                    'title' => 'Async Await and Completion Outcome',
+                    'content' => <<<'PAGE'
+3) Async / Await
+async function getData(){
+   try{
+      const res = await fetch(url);
+      const data = await res.json();
+      console.log(data);
+   }catch(err){
+      console.log(err);
+   }
+}
+
+Cleaner than .then()
+
+Course Completion Outcome
+After lessons, student can:
+- Write modern ES6 code
+- Use modules
+- Build OOP structure
+- Handle async operations
+- Prepare for interviews
+- Build production applications
+PAGE
+                ],
+            ],
+            'questions' => [
+                [
+                    "What are valid Promise states?",
+                    "Started, Finished, Error",
+                    "Open, Closed, Broken",
+                    "Pending, Fulfilled, Rejected",
+                    "Init, Wait, Done",
+                    "C",
+                ],
+                [
+                    "Does await work outside async function?",
+                    "Yes, always",
+                    "No, await is for async functions (except top-level module cases)",
+                    "Only in callbacks",
+                    "Only with setTimeout",
+                    "B",
+                ],
+                [
+                    "Which async function returns a Promise?",
+                    "function run(){ return 1; }",
+                    "const run = async () => 1;",
+                    "const run = () => await 1;",
+                    "function async run(){ return 1; }",
+                    "B",
+                ],
+                [
+                    "Where should .catch typically be used in a promise chain?",
+                    "At the beginning only",
+                    "After each then is mandatory",
+                    "At the end to handle chain errors",
+                    "Never needed",
+                    "C",
+                ],
+                [
+                    "What is a key benefit of async/await?",
+                    "It removes all runtime errors",
+                    "It makes async flow more readable and try/catch friendly",
+                    "It makes code synchronous",
+                    "It avoids promises internally",
+                    "B",
+                ],
+            ],
+        ],
+    ];
+
+    foreach ($lessonData as $orderNum => $def) {
+        $orderNum = (int)$orderNum;
+        $lessonRes = $conn->query("SELECT id, title FROM lessons WHERE course_id=$courseId AND order_num=$orderNum LIMIT 1");
+        if ($lessonRes && $lessonRes->num_rows > 0) {
+            $lesson = $lessonRes->fetch_assoc();
+            $lessonId = (int)$lesson['id'];
+            $lessonTitle = $lesson['title'];
+        } else {
+            $fallbackTitle = $def['fallback_title'];
+            $summary = trim((string)$def['pages'][0]['content']);
+            $insertLesson = $conn->prepare("INSERT INTO lessons (course_id, title, content, duration, order_num, is_preview) VALUES (?, ?, ?, '25 min', ?, 0)");
+            $insertLesson->bind_param("issi", $courseId, $fallbackTitle, $summary, $orderNum);
+            $insertLesson->execute();
+            $lessonId = (int)$conn->insert_id;
+            $lessonTitle = $fallbackTitle;
+            if ($lessonId <= 0) {
+                continue;
+            }
+        }
+
+        storeLessonPages($conn, $lessonId, $def['pages']);
+        $firstPage = trim((string)$def['pages'][0]['content']);
+        $stmtLesson = $conn->prepare("UPDATE lessons SET content=? WHERE id=?");
+        $stmtLesson->bind_param("si", $firstPage, $lessonId);
+        $stmtLesson->execute();
+
+        $quizRes = $conn->query("SELECT id FROM quizzes WHERE lesson_id=$lessonId LIMIT 1");
+        $quizId = 0;
+        if ($quizRes && $quizRes->num_rows > 0) {
+            $quizId = (int)$quizRes->fetch_assoc()['id'];
+        } else {
+            $quizTitle = 'Quiz: ' . $lessonTitle;
+            $insertQuiz = $conn->prepare("INSERT INTO quizzes (course_id, lesson_id, title, pass_percentage) VALUES (?, ?, ?, 60)");
+            $insertQuiz->bind_param("iis", $courseId, $lessonId, $quizTitle);
+            $insertQuiz->execute();
+            $quizId = (int)$conn->insert_id;
+        }
+        if ($quizId <= 0) {
+            continue;
+        }
+
+        $conn->query("DELETE FROM quiz_questions WHERE quiz_id=$quizId");
+        $insertQuestion = $conn->prepare("INSERT INTO quiz_questions (quiz_id, question_text, option_a, option_b, option_c, option_d, correct_option) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        foreach ($def['questions'] as $q) {
+            $insertQuestion->bind_param("issssss", $quizId, $q[0], $q[1], $q[2], $q[3], $q[4], $q[5]);
+            $insertQuestion->execute();
+        }
     }
 }
 
