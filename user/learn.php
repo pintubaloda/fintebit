@@ -119,7 +119,16 @@ $youtubeSearchUrl = '';
 $youtubePlayerUrl = '';
 if ($youtubeUrl !== '') {
     if (preg_match('/(?:v=|youtu\\.be\\/|embed\\/)([A-Za-z0-9_-]{11})/', $youtubeUrl, $m)) {
+        $start = 0;
+        if (preg_match('/[?&]t=(\\d+)s?/i', $youtubeUrl, $tm)) {
+            $start = (int)$tm[1];
+        } elseif (preg_match('/[?&]start=(\\d+)/i', $youtubeUrl, $sm)) {
+            $start = (int)$sm[1];
+        }
         $youtubeEmbedUrl = 'https://www.youtube.com/embed/' . $m[1];
+        if ($start > 0) {
+            $youtubeEmbedUrl .= '?start=' . $start;
+        }
         $youtubePlayerUrl = $youtubeEmbedUrl;
     } else {
         $youtubeSearchUrl = $youtubeUrl;

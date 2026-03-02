@@ -238,7 +238,7 @@ function ensureSchemaCompatibility($conn) {
 }
 
 function runContentMigrationIfNeeded($conn, $courseColumns, $lessonColumns) {
-    $contentVersion = 'content_v8';
+    $contentVersion = 'content_v9';
     $meta = $conn->query("SELECT meta_value FROM app_meta WHERE meta_key='content_version' LIMIT 1");
     $current = ($meta && $meta->num_rows > 0) ? $meta->fetch_assoc()['meta_value'] : '';
 
@@ -329,7 +329,7 @@ function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
                 $youtubeUrl = trim((string)$videoRes->fetch_assoc()['youtube_url']);
             }
             if ($youtubeUrl === '' || strpos($youtubeUrl, 'youtube.com/results?search_query=') !== false) {
-                $autoVideoUrl = buildYoutubeSearchUrl($courseTitle, $lesson['title']);
+                $autoVideoUrl = buildAutoLessonVideoUrl($courseTitle, $lesson['title'], (int)$lesson['order_num']);
                 $updateLessonVideo->bind_param("si", $autoVideoUrl, $lessonId);
                 $updateLessonVideo->execute();
             }
@@ -765,7 +765,34 @@ function lessonVariationStamp($courseTitle, $lessonTitle, $orderNum) {
     return 'LSN-' . $hash;
 }
 
-function buildYoutubeSearchUrl($courseTitle, $lessonTitle) {
+function buildAutoLessonVideoUrl($courseTitle, $lessonTitle, $orderNum) {
+    $title = strtolower($courseTitle);
+    $videoId = '';
+
+    if (strpos($title, 'javascript') !== false) $videoId = 'NCwa_xi0Uuc';
+    elseif (strpos($title, 'html') !== false) $videoId = 'UB1O30fR-EE';
+    elseif (strpos($title, 'css') !== false) $videoId = 'yfoY53QXEnI';
+    elseif (strpos($title, 'react') !== false) $videoId = 'w7ejDZ8SWv8';
+    elseif (strpos($title, 'typescript') !== false) $videoId = 'BwuLxPH8IDs';
+    elseif (strpos($title, 'python') !== false) $videoId = 'rfscVS0vtbw';
+    elseif (strpos($title, 'java') !== false) $videoId = 'eIrMbAQSU34';
+    elseif (strpos($title, 'mysql') !== false || strpos($title, 'sql') !== false || strpos($title, 'database') !== false) $videoId = 'HXV3zeQKqGY';
+    elseif (strpos($title, 'node') !== false) $videoId = 'TlB_eWDSMt4';
+    elseif (strpos($title, 'php') !== false || strpos($title, 'laravel') !== false) $videoId = 'OK_JCtrrv-c';
+    elseif (strpos($title, 'excel') !== false) $videoId = 'Vl0H-qTclOg';
+    elseif (strpos($title, 'machine learning') !== false || strpos($title, 'ai') !== false || strpos($title, 'data science') !== false) $videoId = 'GwIo3gDZCVQ';
+    elseif (strpos($title, 'cybersecurity') !== false || strpos($title, 'security') !== false) $videoId = 'inWWhr5tnEA';
+    elseif (strpos($title, 'devops') !== false || strpos($title, 'cloud') !== false || strpos($title, 'aws') !== false) $videoId = '9zUHg7xjIqQ';
+    elseif (strpos($title, 'marketing') !== false) $videoId = 'nU-IIXBWlS4';
+    elseif (strpos($title, 'design') !== false || strpos($title, 'ui/ux') !== false) $videoId = 'c9Wg6Cb_YlU';
+    elseif (strpos($title, 'blockchain') !== false || strpos($title, 'web3') !== false) $videoId = 'SSo_EIwHSd4';
+    elseif (strpos($title, 'programming') !== false || strpos($title, 'c++') !== false) $videoId = '8jLOx1hD3_o';
+
+    if ($videoId !== '') {
+        $start = max(0, ((int)$orderNum - 1) * 420); // 7 min offset per lesson
+        return 'https://www.youtube.com/watch?v=' . $videoId . '&t=' . $start . 's';
+    }
+
     $query = trim($courseTitle . ' ' . $lessonTitle . ' tutorial');
     return 'https://www.youtube.com/results?search_query=' . rawurlencode($query);
 }
