@@ -18,15 +18,20 @@ $lessons = $conn->query("SELECT * FROM lessons WHERE course_id=$courseId ORDER B
 $lessonId = (int)($_GET['lesson'] ?? 0);
 $currentLesson = null;
 $allLessons = [];
-while($l=$lessons->fetch_assoc()) { $allLessons[] = $l; if($l['id']==$lessonId) $currentLesson=$l; }
+if ($lessons instanceof mysqli_result) {
+    while($l=$lessons->fetch_assoc()) { $allLessons[] = $l; if($l['id']==$lessonId) $currentLesson=$l; }
+}
 if(!$currentLesson && count($allLessons)>0) $currentLesson = $allLessons[0];
 
 // Mark complete
 if(isset($_GET['complete']) && $currentLesson) {
     $stmt2=$conn->prepare("INSERT IGNORE INTO lesson_progress(user_id,lesson_id,course_id,completed,completed_at) VALUES(?,?,?,1,NOW())");
-    $stmt2->bind_param("iii",$_SESSION['user_id'],$currentLesson['id'],$courseId);
-    $stmt2->execute();
-    $done=$conn->query("SELECT COUNT(*) as c FROM lesson_progress WHERE user_id={$_SESSION['user_id']} AND course_id=$courseId AND completed=1")->fetch_assoc()['c'];
+    if ($stmt2) {
+        $stmt2->bind_param("iii",$_SESSION['user_id'],$currentLesson['id'],$courseId);
+        $stmt2->execute();
+    }
+    $doneRes = $conn->query("SELECT COUNT(*) as c FROM lesson_progress WHERE user_id={$_SESSION['user_id']} AND course_id=$courseId AND completed=1");
+    $done = $doneRes ? (int)$doneRes->fetch_assoc()['c'] : 0;
     $total=count($allLessons); $prog=$total>0?min(100,round($done/$total*100)):0;
     $conn->query("UPDATE enrollments SET progress=$prog WHERE user_id={$_SESSION['user_id']} AND course_id=$courseId");
     redirect("learn.php?course=$courseId&lesson={$currentLesson['id']}");
@@ -35,7 +40,9 @@ if(isset($_GET['complete']) && $currentLesson) {
 // Get completed lessons
 $completed = [];
 $r=$conn->query("SELECT lesson_id FROM lesson_progress WHERE user_id={$_SESSION['user_id']} AND course_id=$courseId AND completed=1");
-while($row=$r->fetch_assoc()) $completed[]=$row['lesson_id'];
+if ($r) {
+    while($row=$r->fetch_assoc()) $completed[]=$row['lesson_id'];
+}
 $color = getCategoryColor($course['category']);
 ?>
 <?php include '../includes/header.php'; ?>

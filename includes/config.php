@@ -167,6 +167,15 @@ function ensureSchemaCompatibility($conn) {
         payment_status ENUM('pending','completed','failed') DEFAULT 'completed',
         ordered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
+    $conn->query("CREATE TABLE IF NOT EXISTS lesson_progress (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        lesson_id INT NOT NULL,
+        course_id INT NOT NULL,
+        completed TINYINT(1) DEFAULT 1,
+        completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_progress (user_id, lesson_id, course_id)
+    )");
 
     if ($conn->query("SHOW TABLES LIKE 'lessons'")->num_rows) {
         $lessonColumns = [];
