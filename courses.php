@@ -60,26 +60,26 @@ $allCats = $conn->query("SELECT DISTINCT category FROM courses ORDER BY category
       <select name="category" class="form-control" style="width:auto">
         <option value="">All Categories</option>
         <?php while($c=$allCats->fetch_assoc()): ?>
-        <option value="<?=$c['category']?>" <?=isset($_GET['category'])&&$_GET['category']==$c['category']?'selected':'?>><?=$c['category']?></option>
+        <option value="<?=$c['category']?>" <?=isset($_GET['category'])&&$_GET['category']==$c['category']?'selected':''?>><?=$c['category']?></option>
         <?php endwhile; ?>
       </select>
       <select name="level" class="form-control" style="width:auto">
         <option value="">All Levels</option>
-        <option value="Beginner" <?=isset($_GET['level'])&&$_GET['level']=='Beginner'?'selected':'?>>Beginner</option>
-        <option value="Intermediate" <?=isset($_GET['level'])&&$_GET['level']=='Intermediate'?'selected':'?>>Intermediate</option>
-        <option value="Advanced" <?=isset($_GET['level'])&&$_GET['level']=='Advanced'?'selected':'?>>Advanced</option>
+        <option value="Beginner" <?=isset($_GET['level'])&&$_GET['level']=='Beginner'?'selected':''?>>Beginner</option>
+        <option value="Intermediate" <?=isset($_GET['level'])&&$_GET['level']=='Intermediate'?'selected':''?>>Intermediate</option>
+        <option value="Advanced" <?=isset($_GET['level'])&&$_GET['level']=='Advanced'?'selected':''?>>Advanced</option>
       </select>
       <select name="type" class="form-control" style="width:auto">
         <option value="">All Types</option>
-        <option value="free" <?=isset($_GET['type'])&&$_GET['type']=='free'?'selected':'?>>Free</option>
-        <option value="paid" <?=isset($_GET['type'])&&$_GET['type']=='paid'?'selected':'?>>Paid</option>
+        <option value="free" <?=isset($_GET['type'])&&$_GET['type']=='free'?'selected':''?>>Free</option>
+        <option value="paid" <?=isset($_GET['type'])&&$_GET['type']=='paid'?'selected':''?>>Paid</option>
       </select>
       <select name="sort" class="form-control" style="width:auto">
         <option value="">Most Popular</option>
-        <option value="newest" <?=isset($_GET['sort'])&&$_GET['sort']=='newest'?'selected':'?>>Newest</option>
-        <option value="rating" <?=isset($_GET['sort'])&&$_GET['sort']=='rating'?'selected':'?>>Top Rated</option>
-        <option value="price_low" <?=isset($_GET['sort'])&&$_GET['sort']=='price_low'?'selected':'?>>Price: Low</option>
-        <option value="price_high" <?=isset($_GET['sort'])&&$_GET['sort']=='price_high'?'selected':'?>>Price: High</option>
+        <option value="newest" <?=isset($_GET['sort'])&&$_GET['sort']=='newest'?'selected':''?>>Newest</option>
+        <option value="rating" <?=isset($_GET['sort'])&&$_GET['sort']=='rating'?'selected':''?>>Top Rated</option>
+        <option value="price_low" <?=isset($_GET['sort'])&&$_GET['sort']=='price_low'?'selected':''?>>Price: Low</option>
+        <option value="price_high" <?=isset($_GET['sort'])&&$_GET['sort']=='price_high'?'selected':''?>>Price: High</option>
       </select>
       <button type="submit" class="btn btn-accent"><i class="fas fa-search"></i> Filter</button>
       <a href="courses.php" class="btn btn-ghost">Reset</a>
