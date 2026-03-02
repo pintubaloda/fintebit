@@ -278,7 +278,7 @@ function runCommercialPolicyMigrationIfNeeded($conn) {
 }
 
 function runContentMigrationIfNeeded($conn, $courseColumns, $lessonColumns) {
-    $contentVersion = 'content_v9';
+    $contentVersion = 'content_v10';
     $meta = $conn->query("SELECT meta_value FROM app_meta WHERE meta_key='content_version' LIMIT 1");
     $current = ($meta && $meta->num_rows > 0) ? $meta->fetch_assoc()['meta_value'] : '';
 
@@ -287,6 +287,7 @@ function runContentMigrationIfNeeded($conn, $courseColumns, $lessonColumns) {
     }
 
     seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns);
+    applyCustomJavascriptLesson2ContentAndQuiz($conn);
     $stmt = $conn->prepare("INSERT INTO app_meta (meta_key, meta_value) VALUES ('content_version', ?) ON DUPLICATE KEY UPDATE meta_value=VALUES(meta_value)");
     $stmt->bind_param("s", $contentVersion);
     $stmt->execute();
@@ -803,6 +804,205 @@ function getStageContentBundle($courseTitle, $lessonTitle, $orderNum, $track) {
 function lessonVariationStamp($courseTitle, $lessonTitle, $orderNum) {
     $hash = strtoupper(substr(sha1(strtolower($courseTitle . '|' . $lessonTitle . '|' . (int)$orderNum)), 0, 8));
     return 'LSN-' . $hash;
+}
+
+function applyCustomJavascriptLesson2ContentAndQuiz($conn) {
+    $courseRes = $conn->query("SELECT id FROM courses WHERE title='JavaScript ES6+' LIMIT 1");
+    if (!$courseRes || $courseRes->num_rows === 0) {
+        return;
+    }
+    $courseId = (int)$courseRes->fetch_assoc()['id'];
+
+    $lessonRes = $conn->query("SELECT id, title FROM lessons WHERE course_id=$courseId AND order_num=2 LIMIT 1");
+    if (!$lessonRes || $lessonRes->num_rows === 0) {
+        return;
+    }
+    $lesson = $lessonRes->fetch_assoc();
+    $lessonId = (int)$lesson['id'];
+
+    $page1 = <<<'PAGE'
+LESSON 2: let, const, Scope & Arrow Functions (Deep Dive)
+
+Learning Objectives
+By the end of this lesson, you will:
+- Fully understand JavaScript scoping
+- Master let vs const vs var
+- Understand hoisting and Temporal Dead Zone
+- Deeply understand arrow functions and lexical this
+- Know when NOT to use arrow functions
+
+1) Understanding Scope in JavaScript
+JavaScript has 3 types of scope:
+- Global Scope
+- Function Scope
+- Block Scope (Introduced in ES6)
+
+Problem with var:
+var x = 10;
+if(true){
+   var x = 20;
+}
+console.log(x); // 20 (function-scoped, not block-scoped)
+
+2) let (Block Scoped)
+let x = 10;
+if(true){
+   let x = 20;
+}
+console.log(x); // 10
+
+Each block gets its own scope.
+PAGE;
+
+    $page2 = <<<'PAGE'
+3) const (Immutable Binding)
+const PI = 3.14;
+// PI = 3.15; // Error
+
+Important:
+const does NOT make objects immutable.
+
+const user = { name: "Rakesh" };
+user.name = "Amit"; // allowed
+
+4) Hoisting & Temporal Dead Zone (TDZ)
+Hoisting with var:
+console.log(a); // undefined
+var a = 5;
+
+Internally:
+var a;
+console.log(a);
+a = 5;
+
+Hoisting with let:
+console.log(a); // ReferenceError
+let a = 5;
+
+This period before initialization is called:
+Temporal Dead Zone (TDZ)
+
+5) Arrow Functions (Advanced Understanding)
+Basic syntax:
+const add = (a, b) => a + b;
+
+Multi-line arrow:
+const multiply = (a, b) => {
+   let result = a * b;
+   return result;
+};
+PAGE;
+
+    $page3 = <<<'PAGE'
+6) Arrow Functions & Lexical this
+
+Normal function (wrong this in callback):
+function Person(){
+   this.age = 0;
+   setInterval(function(){
+      this.age++; // wrong context
+   },1000);
+}
+
+Arrow function (inherits parent this):
+function Person(){
+   this.age = 0;
+   setInterval(() => {
+      this.age++; // correct context
+   },1000);
+}
+
+7) When NOT to Use Arrow Functions
+Do NOT use arrow functions:
+- In object methods where dynamic this is needed
+- In constructors
+- In prototype methods
+
+Example:
+const obj = {
+   value: 10,
+   getValue: () => {
+      console.log(this.value); // undefined
+   }
+};
+
+Now complete the quiz for this lesson.
+PAGE;
+
+    storeLessonPages($conn, $lessonId, [
+        ['title' => 'Scope Fundamentals', 'content' => $page1],
+        ['title' => 'Hoisting and Arrow Basics', 'content' => $page2],
+        ['title' => 'Lexical This and Pitfalls', 'content' => $page3],
+    ]);
+
+    $firstPage = trim($page1);
+    $stmtLesson = $conn->prepare("UPDATE lessons SET content=? WHERE id=?");
+    $stmtLesson->bind_param("si", $firstPage, $lessonId);
+    $stmtLesson->execute();
+
+    $quizRes = $conn->query("SELECT id FROM quizzes WHERE lesson_id=$lessonId LIMIT 1");
+    $quizId = 0;
+    if ($quizRes && $quizRes->num_rows > 0) {
+        $quizId = (int)$quizRes->fetch_assoc()['id'];
+    } else {
+        $title = 'Quiz: ' . $lesson['title'];
+        $qIns = $conn->prepare("INSERT INTO quizzes (course_id, lesson_id, title, pass_percentage) VALUES (?, ?, ?, 60)");
+        $qIns->bind_param("iis", $courseId, $lessonId, $title);
+        $qIns->execute();
+        $quizId = (int)$conn->insert_id;
+    }
+    if ($quizId <= 0) {
+        return;
+    }
+
+    $conn->query("DELETE FROM quiz_questions WHERE quiz_id=$quizId");
+    $insertQuestion = $conn->prepare("INSERT INTO quiz_questions (quiz_id, question_text, option_a, option_b, option_c, option_d, correct_option) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $questions = [
+        [
+            "What problem does let solve compared to var?",
+            "It creates block scope and avoids unintended variable overwrite",
+            "It makes all variables immutable",
+            "It disables hoisting completely",
+            "It makes variables global by default",
+            "A",
+        ],
+        [
+            "What is Temporal Dead Zone (TDZ)?",
+            "A memory leak caused by const",
+            "Time before a let/const variable is initialized where access throws error",
+            "A scope only inside async functions",
+            "A special mode for arrow functions",
+            "B",
+        ],
+        [
+            "Arrow functions bind this from where?",
+            "From the function itself at call time",
+            "From global window only",
+            "From the lexical (parent) scope",
+            "From the nearest object literal",
+            "C",
+        ],
+        [
+            "Output:\nlet a = 10;\n{\n  let a = 20;\n}\nconsole.log(a);",
+            "20",
+            "undefined",
+            "ReferenceError",
+            "10",
+            "D",
+        ],
+        [
+            "Choose the correct arrow function to return cube of n.",
+            "const cube = n => { n*n*n; }",
+            "const cube = (n) => n ** 3;",
+            "const cube = (n) => return n*n*n;",
+            "const cube = function(n) => n*n*n;",
+            "B",
+        ],
+    ];
+    foreach ($questions as $q) {
+        $insertQuestion->bind_param("issssss", $quizId, $q[0], $q[1], $q[2], $q[3], $q[4], $q[5]);
+        $insertQuestion->execute();
+    }
 }
 
 function buildAutoLessonVideoUrl($courseTitle, $lessonTitle, $orderNum) {
