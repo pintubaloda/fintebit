@@ -282,10 +282,13 @@ function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
         $updateLesson = $conn->prepare("UPDATE lessons SET content=? WHERE id=?");
         while ($lesson = $rows->fetch_assoc()) {
             $text = trim((string)$lesson['content']);
-            $isGeneric = strlen($text) < 140
+            $needsUpgrade =
+                strlen($text) < 300
+                || stripos($text, 'Lesson goal:') !== false
                 || stripos($text, 'fundamentals and workflow') !== false
-                || stripos($text, 'consistent learning and implementation') !== false;
-            if ($isGeneric) {
+                || stripos($text, 'consistent learning and implementation') !== false
+                || strpos($text, "1) ") === false;
+            if ($needsUpgrade) {
                 $newContent = generateLessonContent($courseTitle, $lesson['title'], (int)$lesson['order_num'], 'Practical lesson content');
                 $lessonId = (int)$lesson['id'];
                 $updateLesson->bind_param("si", $newContent, $lessonId);
@@ -366,35 +369,85 @@ function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
 }
 
 function generateLessonContent($courseTitle, $lessonTitle, $orderNum, $focusLine) {
-    $step = max(1, (int)$orderNum);
-    $practiceTask = "Create a short implementation related to \"" . $courseTitle . "\" and validate the result with one test case.";
-    if ($step === 1) {
-        $practiceTask = "Set up your working environment and document the initial setup steps for future reuse.";
-    } elseif ($step === 2) {
-        $practiceTask = "Implement one complete workflow and note where each concept is applied.";
-    } elseif ($step >= 5) {
-        $practiceTask = "Debug two common errors and write a short checklist to prevent them.";
+    $concepts = getCourseConceptBlocks($courseTitle, $lessonTitle, $focusLine);
+    $content = "Lesson: " . $lessonTitle . "\n\n";
+    $content .= "This lesson is part of \"" . $courseTitle . "\". It follows a practical format with numbered concepts and implementation-focused examples.\n\n";
+
+    $index = 1;
+    foreach ($concepts as $block) {
+        $content .= $index . ") " . $block['title'] . "\n";
+        $content .= $block['explain'] . "\n\n";
+        $content .= "Example:\n" . $block['example'] . "\n\n";
+        $index++;
     }
 
-    return
-        "Lesson goal:\n" .
-        "Master \"" . $lessonTitle . "\" for " . $courseTitle . " with practical understanding.\n\n" .
-        "What you will learn:\n" .
-        "1. " . $focusLine . "\n" .
-        "2. How this topic fits into real implementation work.\n" .
-        "3. Common mistakes and how to avoid them.\n\n" .
-        "Step-by-step guide:\n" .
-        "- Start with the core concept and define expected output.\n" .
-        "- Implement the concept in a small, focused example.\n" .
-        "- Validate output, then refactor for clarity and reuse.\n\n" .
-        "Practice task:\n" .
-        $practiceTask . "\n\n" .
-        "Completion checklist:\n" .
-        "- You can explain the concept in your own words.\n" .
-        "- You can implement it without copying.\n" .
-        "- You can identify at least one optimization or improvement.\n\n" .
-        "Next step:\n" .
-        "Attempt the lesson quiz and pass it to mark this lesson complete.";
+    $content .= "Practice Checklist:\n";
+    $content .= "- Implement one example without copying.\n";
+    $content .= "- Explain when to use each concept.\n";
+    $content .= "- Complete the quiz to mark this lesson complete.\n";
+    return $content;
+}
+
+function getCourseConceptBlocks($courseTitle, $lessonTitle, $focusLine) {
+    $title = strtolower($courseTitle);
+
+    if (strpos($title, 'excel') !== false) {
+        return [
+            ['title' => 'Structured Data Tables', 'explain' => 'Use proper table structure to make formulas and filtering reliable.', 'example' => "Range -> Table (Ctrl+T)\nUse structured references: =SUM(Table1[Revenue])"],
+            ['title' => 'Core Functions', 'explain' => 'Combine SUMIFS, XLOOKUP/VLOOKUP, IF, and TEXT functions for automation.', 'example' => "=SUMIFS(C:C,A:A,\"West\",B:B,\">=2026-01-01\")"],
+            ['title' => 'Data Validation', 'explain' => 'Prevent input errors using dropdowns, limits, and clear prompts.', 'example' => "Data -> Data Validation -> List -> Source: Status values"],
+            ['title' => 'Pivot Analysis', 'explain' => 'Summarize large data quickly with pivots and slicers.', 'example' => "Insert PivotTable -> Rows: Product -> Values: Revenue (Sum)"],
+            ['title' => 'Dashboard Basics', 'explain' => 'Turn analysis into visual insights with KPIs and charts.', 'example' => "Create KPI cells and link chart series to dynamic named ranges"],
+        ];
+    }
+
+    if (strpos($title, 'javascript') !== false || strpos($title, 'react') !== false || strpos($title, 'typescript') !== false || strpos($title, 'html') !== false || strpos($title, 'css') !== false) {
+        return [
+            ['title' => 'Component-Oriented Thinking', 'explain' => 'Break UI into reusable parts with clear state and props/inputs.', 'example' => "const Card = ({title}) => <section>{title}</section>;"],
+            ['title' => 'State and Data Flow', 'explain' => 'Keep one-directional flow and derive UI from state.', 'example' => "const [items, setItems] = useState([]);\nsetItems(prev => [...prev, newItem]);"],
+            ['title' => 'Async Data Handling', 'explain' => 'Fetch data with loading/error branches for reliable UX.', 'example' => "const res = await fetch('/api/items');\nconst data = await res.json();"],
+            ['title' => 'Validation and Edge Cases', 'explain' => 'Validate forms and handle empty/error states explicitly.', 'example' => "if (!email.includes('@')) return setError('Invalid email');"],
+            ['title' => 'Performance and Clean Code', 'explain' => 'Memoize heavy work and keep modules focused.', 'example' => "const total = useMemo(() => items.reduce((s,i)=>s+i.price,0), [items]);"],
+        ];
+    }
+
+    if (strpos($title, 'python') !== false || strpos($title, 'java') !== false || strpos($title, 'c++') !== false || strpos($title, 'node') !== false || strpos($title, 'php') !== false || strpos($title, 'programming') !== false) {
+        return [
+            ['title' => 'Problem Breakdown', 'explain' => 'Convert requirements into small deterministic steps.', 'example' => "Input -> Validate -> Process -> Output"],
+            ['title' => 'Data Structures', 'explain' => 'Choose arrays/maps/sets based on access patterns.', 'example' => "HashMap for O(1) lookup, list for ordered iteration"],
+            ['title' => 'Functions and Reuse', 'explain' => 'Write focused functions with clear input/output contracts.', 'example' => "def calculate_total(items):\n    return sum(i['price'] for i in items)"],
+            ['title' => 'Error Handling', 'explain' => 'Fail gracefully and surface useful diagnostics.', 'example' => "try { ... } catch (err) { logger.error(err.message); }"],
+            ['title' => 'Testing Mindset', 'explain' => 'Cover happy path, boundaries, and invalid cases.', 'example' => "assert calculate_total([]) == 0"],
+        ];
+    }
+
+    if (strpos($title, 'data science') !== false || strpos($title, 'machine learning') !== false || strpos($title, 'ai') !== false) {
+        return [
+            ['title' => 'Data Quality Checks', 'explain' => 'Inspect nulls, duplicates, and type consistency first.', 'example' => "df.isna().sum(); df.duplicated().sum()"],
+            ['title' => 'Feature Engineering', 'explain' => 'Create features that encode useful signal for models.', 'example' => "df['amount_log'] = np.log1p(df['amount'])"],
+            ['title' => 'Train/Validation Split', 'explain' => 'Separate evaluation from training to avoid leakage.', 'example' => "X_train, X_test, y_train, y_test = train_test_split(X,y,test_size=0.2)"],
+            ['title' => 'Model Evaluation', 'explain' => 'Use metrics aligned to business goals.', 'example' => "precision, recall, f1, roc_auc"],
+            ['title' => 'Iteration Loop', 'explain' => 'Improve via error analysis and controlled experiments.', 'example' => "Compare baseline vs tuned model with same validation set"],
+        ];
+    }
+
+    if (strpos($title, 'database') !== false || strpos($title, 'mysql') !== false || strpos($title, 'sql') !== false) {
+        return [
+            ['title' => 'Schema Design', 'explain' => 'Model entities and relationships with primary/foreign keys.', 'example' => "users(id PK) -> orders(user_id FK)"],
+            ['title' => 'Query Patterns', 'explain' => 'Use joins, grouping, and filtering intentionally.', 'example' => "SELECT c.name, COUNT(*) FROM courses c JOIN enrollments e ON e.course_id=c.id GROUP BY c.name;"],
+            ['title' => 'Indexing', 'explain' => 'Add indexes to high-cardinality filters and join keys.', 'example' => "CREATE INDEX idx_enrollments_user ON enrollments(user_id);"],
+            ['title' => 'Transactions', 'explain' => 'Keep multi-step writes consistent and recoverable.', 'example' => "START TRANSACTION; ... COMMIT;"],
+            ['title' => 'Performance Review', 'explain' => 'Use explain plans and remove full scans on hot paths.', 'example' => "EXPLAIN SELECT ... WHERE user_id=?;"],
+        ];
+    }
+
+    return [
+        ['title' => 'Core Fundamentals', 'explain' => $focusLine, 'example' => "Define one clear outcome for this lesson and map the required steps."],
+        ['title' => 'Practical Workflow', 'explain' => 'Apply the concept in a small repeatable workflow.', 'example' => "Plan -> Implement -> Validate -> Improve"],
+        ['title' => 'Quality Checks', 'explain' => 'Verify output quality before moving to the next module.', 'example' => "Run checklist and confirm expected output against sample input."],
+        ['title' => 'Common Pitfalls', 'explain' => 'Recognize and fix mistakes early.', 'example' => "Document one bug and the exact correction applied."],
+        ['title' => 'Production Relevance', 'explain' => 'Connect this concept to real project execution.', 'example' => "Map this lesson to one real feature in your application stack."],
+    ];
 }
 
 function getJavascriptEs6CoreLessonContent() {

@@ -1,6 +1,34 @@
 <?php
 require_once 'includes/db.php';
 
+function setupDetailedLessonContent($courseTitle, $lessonTitle, $focusLine) {
+    return
+        "Lesson: " . $lessonTitle . "\n\n" .
+        "This lesson belongs to \"" . $courseTitle . "\" and follows a practical concept-driven format.\n\n" .
+        "1) Core Idea\n" .
+        $focusLine . "\n\n" .
+        "Example:\n" .
+        "Break the concept into input -> process -> output and validate each stage.\n\n" .
+        "2) Practical Flow\n" .
+        "Use a repeatable workflow to implement the concept confidently.\n\n" .
+        "Example:\n" .
+        "Plan -> Implement -> Test -> Refactor.\n\n" .
+        "3) Common Mistakes\n" .
+        "Identify where learners usually fail and apply a correction strategy.\n\n" .
+        "Example:\n" .
+        "Write one failing scenario and the corrected solution.\n\n" .
+        "4) Real Project Use\n" .
+        "Connect this lesson to real product features and production behavior.\n\n" .
+        "Example:\n" .
+        "Map this concept to one feature in a real application module.\n\n" .
+        "5) Assessment Readiness\n" .
+        "Summarize key points before attempting quiz questions.\n\n" .
+        "Example:\n" .
+        "Create a 3-point checklist and verify your implementation.\n\n" .
+        "Next step:\n" .
+        "Take the quiz for this lesson and pass it to mark completion.";
+}
+
 // Create tables
 $tables = [
 "CREATE TABLE IF NOT EXISTS users (
@@ -179,12 +207,7 @@ while ($allCourseRows && ($cr = $allCourseRows->fetch_assoc())) {
     $idx = 1;
     foreach ($lessonTemplates as $tpl) {
         $ltitle = $tpl[0] . ": " . $ctitle;
-        $lcontent = "Lesson goal:\nMaster \"" . $ltitle . "\" for " . $ctitle . " with practical understanding.\n\n" .
-            "What you will learn:\n1. " . $tpl[1] . "\n2. How this topic fits into real implementation work.\n3. Common mistakes and how to avoid them.\n\n" .
-            "Step-by-step guide:\n- Start with the core concept and define expected output.\n- Implement in a focused example.\n- Validate output and refactor for clarity.\n\n" .
-            "Practice task:\nCreate a short implementation related to \"" . $ctitle . "\" and verify expected output.\n\n" .
-            "Completion checklist:\n- You can explain the concept clearly.\n- You can implement it without copying.\n- You can identify one improvement.\n\n" .
-            "Next step:\nAttempt the lesson quiz and pass it to mark this lesson complete.";
+        $lcontent = setupDetailedLessonContent($ctitle, $ltitle, $tpl[1]);
         $duration = (string)(10 + $idx * 5) . " min";
         $preview = $idx === 1 ? 1 : 0;
         $lessonInsert->bind_param("isssii", $cid, $ltitle, $lcontent, $duration, $idx, $preview);
