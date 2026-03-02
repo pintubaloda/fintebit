@@ -281,26 +281,16 @@ function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
         $rows = $existingLessons->get_result();
         $updateLesson = $conn->prepare("UPDATE lessons SET content=? WHERE id=?");
         while ($lesson = $rows->fetch_assoc()) {
-            $text = trim((string)$lesson['content']);
-            $needsUpgrade =
-                strlen($text) < 300
-                || stripos($text, 'Lesson goal:') !== false
-                || stripos($text, 'fundamentals and workflow') !== false
-                || stripos($text, 'consistent learning and implementation') !== false
-                || strpos($text, "1) ") === false;
-            if ($needsUpgrade) {
-                $newContent = generateLessonContent($courseTitle, $lesson['title'], (int)$lesson['order_num'], 'Practical lesson content');
-                $lessonId = (int)$lesson['id'];
-                $updateLesson->bind_param("si", $newContent, $lessonId);
-                $updateLesson->execute();
-            }
+            $lessonId = (int)$lesson['id'];
+            $newContent = generateLessonContent($courseTitle, $lesson['title'], (int)$lesson['order_num'], 'Practical lesson content');
+            $updateLesson->bind_param("si", $newContent, $lessonId);
+            $updateLesson->execute();
 
-            // Apply a high-detail example lesson for JavaScript ES6+ core lesson.
+            // Keep a high-detail custom example for JavaScript ES6+ core lesson.
             if (
                 stripos($courseTitle, 'JavaScript ES6+') !== false &&
                 stripos($lesson['title'], 'Core') !== false
             ) {
-                $lessonId = (int)$lesson['id'];
                 $es6Content = getJavascriptEs6CoreLessonContent();
                 $updateLesson->bind_param("si", $es6Content, $lessonId);
                 $updateLesson->execute();
@@ -338,25 +328,23 @@ function seedDefaultLessonsAndQuizzes($conn, $courseColumns, $lessonColumns) {
             continue;
         }
 
-        $existingQuestionsRes = $conn->query("SELECT question_text FROM quiz_questions WHERE quiz_id=$quizId ORDER BY id");
-        $existingQuestions = $existingQuestionsRes ? $existingQuestionsRes->fetch_all(MYSQLI_ASSOC) : [];
-        $needsRefresh = count($existingQuestions) < 4 || isGenericQuizSet($existingQuestions);
-
-        if ($needsRefresh) {
-            $conn->query("DELETE FROM quiz_questions WHERE quiz_id=$quizId");
-            $questions = buildLessonQuizQuestions($courseTitle, $lessonTitle, $orderNum, 'Lesson-specific understanding');
-            foreach ($questions as $q) {
-                $insertQuestion->bind_param("issssss", $quizId, $q[0], $q[1], $q[2], $q[3], $q[4], $q[5]);
-                $insertQuestion->execute();
-            }
+        // Force-refresh questions so every lesson gets its own quiz set.
+        $conn->query("DELETE FROM quiz_questions WHERE quiz_id=$quizId");
+        $questions = buildLessonQuizQuestions($courseTitle, $lessonTitle, $orderNum, 'Lesson-specific understanding');
+        foreach ($questions as $q) {
+            $insertQuestion->bind_param("issssss", $quizId, $q[0], $q[1], $q[2], $q[3], $q[4], $q[5]);
+            $insertQuestion->execute();
         }
     }
 }
 
 function generateLessonContent($courseTitle, $lessonTitle, $orderNum, $focusLine) {
     $concepts = getLessonSpecificConcepts($courseTitle, $lessonTitle, $orderNum, $focusLine);
+    $stage = getLessonStageName($orderNum);
     $content = "Lesson: " . $lessonTitle . "\n\n";
-    $content .= "This lesson is part of \"" . $courseTitle . "\". It follows a practical format with numbered concepts and implementation-focused examples.\n\n";
+    $content .= "Course: " . $courseTitle . "\n";
+    $content .= "Stage: " . $stage . " (Module " . (int)$orderNum . ")\n\n";
+    $content .= "This lesson is tailored to the module stage and topic, with numbered concepts and implementation-focused examples.\n\n";
 
     $index = 1;
     foreach ($concepts as $block) {
@@ -369,8 +357,22 @@ function generateLessonContent($courseTitle, $lessonTitle, $orderNum, $focusLine
     $content .= "Practice Checklist:\n";
     $content .= "- Implement one example without copying.\n";
     $content .= "- Explain when to use each concept.\n";
+    $content .= "- Write one lesson-specific note for \"" . $lessonTitle . "\".\n";
     $content .= "- Complete the quiz to mark this lesson complete.\n";
     return $content;
+}
+
+function getLessonStageName($orderNum) {
+    $map = [
+        1 => 'Foundation',
+        2 => 'Core Workflow',
+        3 => 'Guided Practice',
+        4 => 'Project Application',
+        5 => 'Troubleshooting',
+        6 => 'Assessment',
+    ];
+    $index = max(1, (int)$orderNum);
+    return $map[$index] ?? ('Advanced Module ' . $index);
 }
 
 function getLessonSpecificConcepts($courseTitle, $lessonTitle, $orderNum, $focusLine) {
@@ -402,9 +404,10 @@ function buildLessonQuizQuestions($courseTitle, $lessonTitle, $orderNum, $focusL
     $c3 = $concepts[2];
     $c4 = $concepts[3];
 
+    $stage = getLessonStageName($orderNum);
     return [
         [
-            "In \"" . $lessonTitle . "\", which concept should you apply first?",
+            "For \"" . $lessonTitle . "\" (" . $stage . "), which concept should you apply first?",
             $c1['title'],
             $c2['title'],
             $c3['title'],
@@ -412,7 +415,7 @@ function buildLessonQuizQuestions($courseTitle, $lessonTitle, $orderNum, $focusL
             "A",
         ],
         [
-            "What is the best approach for mastering \"" . $c2['title'] . "\" in this lesson?",
+            "What is the best approach for mastering \"" . $c2['title'] . "\" in this specific lesson?",
             "Skip implementation and move to next lesson",
             "Use a practical example and validate output",
             "Only memorize terms",
@@ -420,7 +423,7 @@ function buildLessonQuizQuestions($courseTitle, $lessonTitle, $orderNum, $focusL
             "B",
         ],
         [
-            "Which action aligns with \"" . $c3['title'] . "\" for " . $courseTitle . "?",
+            "Which action aligns with \"" . $c3['title'] . "\" for " . $courseTitle . " in this module?",
             "Ignore data quality and edge cases",
             "Avoid testing to save time",
             "Implement, verify, and refine using feedback",
@@ -428,7 +431,7 @@ function buildLessonQuizQuestions($courseTitle, $lessonTitle, $orderNum, $focusL
             "C",
         ],
         [
-            "After completing \"" . $lessonTitle . "\", what should you do next?",
+            "After completing \"" . $lessonTitle . "\", what should you do next in the learning flow?",
             "Skip quiz and mark complete manually",
             "Move to random topic without review",
             "Delete your practice notes",
@@ -436,29 +439,6 @@ function buildLessonQuizQuestions($courseTitle, $lessonTitle, $orderNum, $focusL
             "D",
         ],
     ];
-}
-
-function isGenericQuizSet($rows) {
-    if (empty($rows)) {
-        return true;
-    }
-    $patterns = [
-        'main objective of',
-        'best learning result',
-        'complete this lesson effectively',
-        'improves mastery in this lesson',
-    ];
-    $hits = 0;
-    foreach ($rows as $row) {
-        $q = strtolower($row['question_text'] ?? '');
-        foreach ($patterns as $p) {
-            if (strpos($q, $p) !== false) {
-                $hits++;
-                break;
-            }
-        }
-    }
-    return $hits >= 2;
 }
 
 function getCourseConceptBlocks($courseTitle, $lessonTitle, $focusLine) {
