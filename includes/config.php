@@ -47,6 +47,7 @@ if ($conn->connect_error) {
     die('Connection failed: ' . $conn->connect_error);
 }
 $conn->set_charset('utf8mb4');
+ensureSchemaCompatibility($conn);
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -90,4 +91,91 @@ function getCategoryColor($cat) {
         'Blockchain' => '#f59e0b', 'default' => '#6b7280'
     ];
     return $colors[$cat] ?? $colors['default'];
+}
+
+function ensureSchemaCompatibility($conn) {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
+    if (!$conn->query("SHOW TABLES LIKE 'courses'")->num_rows) {
+        return;
+    }
+
+    // Ensure columns expected by front-end pages exist.
+    $courseColumns = [];
+    $cols = $conn->query("SHOW COLUMNS FROM courses");
+    while ($row = $cols->fetch_assoc()) {
+        $courseColumns[$row['Field']] = true;
+    }
+
+    if (!isset($courseColumns['slug'])) {
+        $conn->query("ALTER TABLE courses ADD COLUMN slug VARCHAR(200) NULL");
+        $conn->query("CREATE INDEX idx_courses_slug ON courses (slug)");
+    }
+    if (!isset($courseColumns['status'])) {
+        $conn->query("ALTER TABLE courses ADD COLUMN status ENUM('active','inactive') DEFAULT 'active'");
+    }
+    if (!isset($courseColumns['total_lessons'])) {
+        $conn->query("ALTER TABLE courses ADD COLUMN total_lessons INT DEFAULT 0");
+    }
+    if (!isset($courseColumns['students_count'])) {
+        $conn->query("ALTER TABLE courses ADD COLUMN students_count INT DEFAULT 0");
+    }
+
+    // Backfill legacy column values to modern names.
+    $courseColumns = [];
+    $cols = $conn->query("SHOW COLUMNS FROM courses");
+    while ($row = $cols->fetch_assoc()) {
+        $courseColumns[$row['Field']] = true;
+    }
+    if (isset($courseColumns['lessons']) && isset($courseColumns['total_lessons'])) {
+        $conn->query("UPDATE courses SET total_lessons = lessons WHERE total_lessons = 0");
+    }
+    if (isset($courseColumns['students']) && isset($courseColumns['students_count'])) {
+        $conn->query("UPDATE courses SET students_count = students WHERE students_count = 0");
+    }
+    if (isset($courseColumns['status'])) {
+        $conn->query("UPDATE courses SET status='active' WHERE status IS NULL OR status=''");
+    }
+
+    if (isset($courseColumns['slug'])) {
+        $res = $conn->query("SELECT id, title FROM courses WHERE slug IS NULL OR slug=''");
+        while ($res && ($row = $res->fetch_assoc())) {
+            $slug = strtolower(trim($row['title']));
+            $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
+            $slug = trim($slug, '-');
+            if ($slug === '') {
+                $slug = 'course';
+            }
+            $slug = $slug . '-' . (int)$row['id'];
+            $stmt = $conn->prepare("UPDATE courses SET slug=? WHERE id=?");
+            $id = (int)$row['id'];
+            $stmt->bind_param('si', $slug, $id);
+            $stmt->execute();
+        }
+    }
+
+    // Required by dashboards and enrollment/payment flows.
+    $conn->query("CREATE TABLE IF NOT EXISTS orders (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        course_id INT NOT NULL,
+        amount DECIMAL(10,2) NOT NULL,
+        payment_status ENUM('pending','completed','failed') DEFAULT 'completed',
+        ordered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )");
+
+    if ($conn->query("SHOW TABLES LIKE 'lessons'")->num_rows) {
+        $lessonColumns = [];
+        $lcols = $conn->query("SHOW COLUMNS FROM lessons");
+        while ($row = $lcols->fetch_assoc()) {
+            $lessonColumns[$row['Field']] = true;
+        }
+        if (!isset($lessonColumns['is_preview'])) {
+            $conn->query("ALTER TABLE lessons ADD COLUMN is_preview TINYINT(1) DEFAULT 0");
+        }
+    }
 }

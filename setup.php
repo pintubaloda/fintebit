@@ -15,6 +15,7 @@ $tables = [
 "CREATE TABLE IF NOT EXISTS courses (
     id INT AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(200) NOT NULL,
+    slug VARCHAR(200) UNIQUE,
     description TEXT,
     category VARCHAR(100),
     price DECIMAL(10,2) DEFAULT 0.00,
@@ -22,11 +23,14 @@ $tables = [
     level ENUM('Beginner','Intermediate','Advanced') DEFAULT 'Beginner',
     duration VARCHAR(50),
     lessons INT DEFAULT 0,
+    total_lessons INT DEFAULT 0,
     instructor VARCHAR(100),
     image_color VARCHAR(20) DEFAULT '#4f46e5',
     icon VARCHAR(50) DEFAULT 'fas fa-book',
     rating DECIMAL(3,1) DEFAULT 4.5,
     students INT DEFAULT 0,
+    students_count INT DEFAULT 0,
+    status ENUM('active','inactive') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )",
 "CREATE TABLE IF NOT EXISTS enrollments (
@@ -46,7 +50,16 @@ $tables = [
     content TEXT,
     duration VARCHAR(20),
     order_num INT DEFAULT 0,
+    is_preview TINYINT(1) DEFAULT 0,
     FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+)",
+"CREATE TABLE IF NOT EXISTS orders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    course_id INT NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    payment_status ENUM('pending','completed','failed') DEFAULT 'completed',
+    ordered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )",
 "CREATE TABLE IF NOT EXISTS reviews (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -100,8 +113,11 @@ $courses = [
 
 $conn->query("DELETE FROM courses");
 foreach ($courses as $c) {
-    $stmt = $conn->prepare("INSERT INTO courses (title, description, category, price, is_free, level, duration, lessons, instructor, image_color, icon, rating, students) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("sssdiisssssdi", $c[0], $c[1], $c[2], $c[3], $c[4], $c[5], $c[6], $c[7], $c[8], $c[9], $c[10], $c[11], $c[12]);
+    $slug = strtolower(trim($c[0]));
+    $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
+    $slug = trim($slug, '-');
+    $stmt = $conn->prepare("INSERT INTO courses (title, slug, description, category, price, is_free, level, duration, lessons, total_lessons, instructor, image_color, icon, rating, students, students_count, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')");
+    $stmt->bind_param("ssssdissiisssdii", $c[0], $slug, $c[1], $c[2], $c[3], $c[4], $c[5], $c[6], $c[7], $c[7], $c[8], $c[9], $c[10], $c[11], $c[12], $c[12]);
     $stmt->execute();
 }
 
